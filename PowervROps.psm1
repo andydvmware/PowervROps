@@ -1,62 +1,72 @@
 # PowervROps
 
-# /api/auth
 
-function acquireToken { # NEED TO CHECK THAT TOKEN IS RETURNED CORRECTLY....
-	<#
-	.SYNOPSIS
-		Creates a new Resource in the system associated with an existing adapter instance..
-	.DESCRIPTION
-		The API will create the missing Adapter Kind and Resource Kind contained within the ResourceKey of the Resource if they do not exist. The API will return an error if the adapter instance specified does not exist.
-		Additional implementation notes:
-		When creating a Resource, if the Resource Identifiers that are unique and required are not specified, the API would return an error with HTTP status code of 500 and an error message indicating the set of missing Resource Identifiers.
-		When creating a Resource, if the Resource Identifiers that are unique but not required are not specified, the Resource is created where the uniquely identifying Resource Identifiers that were not specified will have their value as an empty string. 
-	.EXAMPLE
-		CreateResourceUsingAdapterKind -credentials [some PS credentials] -resthost 'myvropshost.local' -adapterKindKey 'VMWARE'
-	.EXAMPLE
-		CreateResourceUsingAdapterKind -credentials [some PS credentials] -resthost 'myvropshost.local' -adapterKindKey 'VMWARE' -responseformat 'json' -restcontettype 'json' -body [some body content xml/json]
-	.PARAMETER credentials
-		A set of PS credentials that are passed to the rest host for authentication during execution
-	.PARAMETER resthost
-		Fully qualified domain name of the vROps node/cluster that you are running the REST call against
-	.PARAMETER responseformat
-		Equivalent to the accept component of the header. The accepted values are xml or json (default)
-	.PARAMETER restcontenttype
-		The format of the body content. Accepted values are xml or json (default)
-	#> 
-	Param	(
+function getTimeSinceEpoch {
 
-		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$contenttype = 'json',
-		[parameter(Mandatory=$false)][string]$username,
-		[parameter(Mandatory=$false)][string]$authSource,
-		[parameter(Mandatory=$false)][string]$password
-
-		)		
-	$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$accept)
-	$restheaders.Add('Content-Type','application/'+$contenttype)
-	$resturl = 'https://' + $resthost + '/suite-api/api/auth/token/acquire'
-	$body = @{
-			'username' = $username
-			'authSource' = $authSource
-			'password' = $password
-			'others' = @()
-			'otherAttributes' = @{}
-			} | convertto-json
-	Try {
-		$reponse = Invoke-RestMethod -Method 'POST' -Uri $resturl -Headers $restheaders -body $body -ErrorAction Stop
-	}
-	Catch {
-		$Error[0].Exception.InnerException
-		return $_.Exception.Message	
-	}
-	return $reponse.token
-
-
+$epoch = (get-date -Date "01/01/1970").ToUniversalTime()
+$timenow = (get-date).ToUniversalTime()
+$timesinceepoch = [math]::floor(($timenow - $epoch).TotalMilliseconds)
+return $timesinceepoch
+}
+function setRestHeaders {
+Param	(
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',	
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$contenttype = 'json'
+		
+		)
+$restheaders = @{}
+$restheaders.Add('Accept','application/'+$accept)
+if ($contenttype -ne $null) {
+$restheaders.Add('Content-Type','application/'+$contenttype)
+}
+if ($token -ne $null) {
+	$restheaders.Add('Authorization',('vRealizeOpsToken ' + $token))
+}		
+return $restheaders
 }
 
+#/api/actiondefinitions
+
+function getAllActions {
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'	
+		)
+	if (($credentials -eq $null) -and ($token -eq $null)) {
+		return "No credentials or bearer token supplied"
+	}
+	else {
+		$restheaders = setRestHeaders -accept $accept -token $token
+		$resturl = 'https://' + $resthost + '/suite-api/api/actiondefinitions'
+		Try {
+			$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -body $body -ErrorAction Stop
+		}
+		Catch {
+			return $_.Exception.Message	
+		}
+		return $reponse
+	}
+}
+
+#/api/actions
+
+
+
+# /api/adapterkinds
+
+
+
+
+# /api/adapters
+
+
+
+# /api/alertdefinitions
+
+	
 function getAlertDefinitionById {
 	<#
 	.SYNOPSIS
@@ -96,8 +106,10 @@ function getAlertDefinitionById {
 		return $_.Exception.Message	
 	}
 	return $reponse
-}
+}	
+function getAlertDefinitions {
 
+}
 function updateAlertDefinition {
 	<#
 	.SYNOPSIS
@@ -142,12 +154,58 @@ function updateAlertDefinition {
 }
 
 
+
+# /api/alertplugins
+
+
+	
+# /api/alerts	
+
+
+# /api/auth
+
+function acquireToken {
+
+	Param	(
+
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$contenttype = 'json',
+		[parameter(Mandatory=$false)][string]$username,
+		[parameter(Mandatory=$false)][string]$authSource,
+		[parameter(Mandatory=$false)][string]$password
+
+		)		
+	$restheaders = @{}
+	$restheaders.Add('Accept','application/'+$accept)
+	$restheaders.Add('Content-Type','application/'+$contenttype)
+	$resturl = 'https://' + $resthost + '/suite-api/api/auth/token/acquire'
+	$body = @{
+			'username' = $username
+			'authSource' = $authSource
+			'password' = $password
+			'others' = @()
+			'otherAttributes' = @{}
+			} | convertto-json
+	Try {
+		$reponse = Invoke-RestMethod -Method 'POST' -Uri $resturl -Headers $restheaders -body $body -ErrorAction Stop
+	}
+	Catch {
+		$Error[0].Exception.InnerException
+		return $_.Exception.Message	
+	}
+	return $reponse.token
+
+
+}
+
+# /api/collectorgroups
+
+
 # /api/collectors
 # ---------------
 
-function getAdaptersonCollector {
-# GET /api/collectors/{id}/adapters
-}
+
 
 function getCollectors {
 
@@ -274,13 +332,68 @@ function Get-vROpsAdapterTypes {
 	return $reponse
 }
 
+# /api/credentials
 
+# /api/deployment
+
+# /api/events
+
+# /api/maintenanceschedules
+
+# /api/notifications
+
+# /api/recommendations
+
+# /api/reportdefinitions
+
+# /api/reports
 
 # /api/resources
 
-function addProperties { # NOT STARTED
-# POST /api/resources/{id}/properties
+function addProperties {
+
+	<#
+	.SYNOPSIS
+		TBC
+	.DESCRIPTION
+		TBC
+		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
+	.EXAMPLE
+		TBC
+	.EXAMPLE
+		TBC
+	.PARAMETER credentials
+		TBC
+	.PARAMETER resthost
+		TBC
+	.PARAMETER responseformat
+		TBC
+	#> 
+		Param	(
+		[parameter(Mandatory=$true)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][ValidateSet('xml','json')]$restcontenttype = 'json',
+		[parameter(Mandatory=$true)][String]$body,
+		[parameter(Mandatory=$true)][String]$object
+		)
+		
+	
+	$resturl = 'https://' + $resthost + '/suite-api/api/resources/' + $object + '/properties/'
+	$restheaders = @{}
+	$restheaders.Add('Accept','application/'+$accept)
+	$contenttype = 'application/' + $restcontenttype
+	Try {
+		$reponse = Invoke-RestMethod -Method 'POST' -Uri $resturl -Headers $restheaders -credential $credentials -body $body -contenttype $contenttype -ErrorAction Stop
+	}
+	Catch {
+		$Error[0].Exception.InnerException
+		return $_.Exception.Message	
+	}
+	return $reponse	
+
 }
+
 function addRelationship {
 	<#
 	.SYNOPSIS
@@ -327,6 +440,49 @@ function addRelationship {
 		}
 		return $reponse
 }
+
+
+function addStats {
+	<#
+	.SYNOPSIS
+		TBC
+	.DESCRIPTION
+		TBC
+		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
+	.EXAMPLE
+		TBC
+	.EXAMPLE
+		TBC
+	.PARAMETER credentials
+		TBC
+	.PARAMETER resthost
+		TBC
+	.PARAMETER responseformat
+		TBC
+	#>
+	Param	(
+		[parameter(Mandatory=$true)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json',
+		[parameter(Mandatory=$true)]$body,
+		[parameter(Mandatory=$true)][ValidateSet('xml','json')]$restcontenttype = 'json',
+		[parameter(Mandatory=$true)][String]$objectid
+		)
+		$restheaders = @{}
+		$restheaders.Add('Accept','application/'+$responseformat)
+		$resturl = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/stats'
+		$contenttype = 'application/' + $restcontenttype
+		Try {
+			$reponse = Invoke-RestMethod -Method 'POST' -Uri $resturl -Headers $restheaders -credential $credentials -body $body -contenttype $contenttype -ErrorAction Stop
+		}
+		Catch {
+			return $_.Exception.Message	
+		}
+		return $reponse
+
+}
+
+
 function setRelationship {
 	<#
 	.SYNOPSIS
@@ -392,11 +548,12 @@ function getRelationship {
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json',
 		[parameter(Mandatory=$true)][String]$object,
-		[parameter(Mandatory=$true)][ValidateSet('children','parent')][String]$relationship
+		[parameter(Mandatory=$true)][ValidateSet('children','parents')][String]$relationship
 		)
 	$restheaders = @{}
 	$restheaders.Add('Accept','application/'+$responseformat)
 	$resturl = 'https://' + $resthost + '/suite-api/api/resources/' + $object + '/relationships/' + $relationship
+	$resturl
 	Try {
 		$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -credential $credentials -ErrorAction Stop
 	}
@@ -468,8 +625,8 @@ function startMonitoringResource {
 		)
 	$restheaders = @{}
 	$restheaders.Add('Accept','application/'+$responseformat)
-	$resturl = 'https://' + $resthost + '/suite-api/api/resources/' + $parentcustomdatacenter + '/monitoringstate/start'
-	$response = Invoke-WebRequest -Method 'PUT' -Uri $resturl -credential $vropscreds -contenttype $restcontenttype -headers $restheaders	
+	$resturl = 'https://' + $resthost + '/suite-api/api/resources/' + $object + '/monitoringstate/start'
+	$response = Invoke-WebRequest -Method 'PUT' -Uri $resturl -credential $credentials -contenttype $restcontenttype -headers $restheaders	
 }
 function getResources { # NEED TO ADD ALL QUERY TYPES
 	<#
@@ -496,7 +653,8 @@ function getResources { # NEED TO ADD ALL QUERY TYPES
 		[parameter(Mandatory=$false)][String]$name,
 		[parameter(Mandatory=$false)][String]$resourceKind
 		)
-	$resturl = 'https://' + $resthost + '/suite-api/api/resources/?name=' + $name + '&resourceKind=' + $resourceKind
+	$resturl = 'https://' + $resthost + '/suite-api/api/resources?name=' + $name + '&resourceKind=' + $resourceKind
+	$resturl
 	$restheaders = @{}
 	$restheaders.Add('Accept','application/'+$responseformat)
 	Try {
@@ -568,144 +726,76 @@ $body
 }
 # /api/solutions
 
-function addLicenceKeystoSolution {
-# POST /api/solutions/{solutionId}/licenses
-}
-function deleteLicenceKey {
-# DELETE /api/solutions/{solutionId}/licenses/{licenseId}
-}
-function getAdapterKindsForSolution {
-# GET /api/solutions/{solutionId}/adapterkinds
-}
-function getLicenceKeysForSolution {
-# GET /api/solutions/{solutionId}/licenses
-}
-function getSolution {
-# GET /api/solutions/{solutionId}
-}
-function getSolutions {
-# GET /api/solutions
-}
+
 
 # /api/supermetrics
 
-function createSuperMetric {
-	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		TBC
-	.PARAMETER resthost
-		TBC
-	.PARAMETER responseformat
-		TBC
-	#>
-}
-function deleteSuperMetric {
-	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		TBC
-	.PARAMETER resthost
-		TBC
-	.PARAMETER responseformat
-		TBC
-	#>
-}
+
 function getSuperMetric {
-	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		TBC
-	.PARAMETER resthost
-		TBC
-	.PARAMETER responseformat
-		TBC
-	#>
-		Param	(
-		[parameter(Mandatory=$true)]$credentials,
+Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json'
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][string]$id	
 		)
+	if (($credentials -eq $null) -and ($token -eq $null)) {
+		return "No credentials or bearer token supplied"
+	}
+	else {
+		$restheaders = setRestHeaders -accept $accept -token $token
+		$resturl = 'https://' + $resthost + '/suite-api/api/supermetrics/' + $id
+		Try {
+			$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -body $body -ErrorAction Stop
+		}
+		Catch {
+			return $_.Exception.Message	
+		}
+		return $reponse
+	}
 }
+
 function getSuperMetrics {
-	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		TBC
-	.PARAMETER resthost
-		TBC
-	.PARAMETER responseformat
-		TBC
-	#>
-		Param	(
-		[parameter(Mandatory=$true)]$credentials,
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json'
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][string]$name	
 		)
-	$resturl = 'https://' + $resthost + '/suite-api/api/supermetrics'
-	$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$responseformat)
-	Try {
-		$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -credential $credentials -ErrorAction Stop 
+	if (($credentials -eq $null) -and ($token -eq $null)) {
+		return "No credentials or bearer token supplied"
 	}
-	Catch {
-		return $_.Exception.Message	
+	else {
+		$restheaders = setRestHeaders -accept $accept -token $token
+		if (($name -eq $null) -or ($name -eq "")) {
+			$resturl = 'https://' + $resthost + '/suite-api/api/supermetrics'
+		}
+		else {
+			$resturl = 'https://' + $resthost + '/suite-api/api/supermetrics?name=' + $name
+		}
+		Try {
+			$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -body $body -ErrorAction Stop
+		}
+		Catch {
+			return $_.Exception.Message	
+		}
+		return $reponse
 	}
-	return $reponse
 }
-function updateSuperMetric {
 
 
-	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		TBC
-	.PARAMETER resthost
-		TBC
-	.PARAMETER responseformat
-		TBC
-	#>
-}
+
+
+
+# /api/symptomdefinitions
+
+# /api/symptoms
+
+# /api/tasks
+
+# /api/versions
+
 
 # /internal/resources
 function getCustomGroup {
@@ -786,6 +876,93 @@ function createCustomGroup {
 
 }
 
+function getMembersOfGroup {
+
+
+
+
+	<#
+	.SYNOPSIS
+		TBC
+	.DESCRIPTION
+		TBC
+		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
+	.EXAMPLE
+		TBC
+	.EXAMPLE
+		TBC
+	.PARAMETER credentials
+		TBC
+	.PARAMETER resthost
+		TBC
+	.PARAMETER responseformat
+		TBC
+	#>
+Param	(
+		[parameter(Mandatory=$true)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][String]$objectid
+		)
+	$resturl = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $objectid + '/members'
+	$restheaders = @{}
+	$restheaders.Add('Accept','application/'+$accept)
+	$restheaders.Add("X-vRealizeOps-API-use-unsupported","true")
+	Try {
+		$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -credential $credentials -ErrorAction Stop
+	}
+	Catch {
+		$Error[0].Exception.InnerException
+		return $_.Exception.Message	
+	}
+	return $reponse
+
+
+
+
+
+
+}
+
+function deleteCustomGroup {
+	<#
+	.SYNOPSIS
+		TBC
+	.DESCRIPTION
+		TBC
+		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
+	.EXAMPLE
+		TBC
+	.EXAMPLE
+		TBC
+	.PARAMETER credentials
+		TBC
+	.PARAMETER resthost
+		TBC
+	.PARAMETER responseformat
+		TBC
+	#>
+Param	(
+		[parameter(Mandatory=$true)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][String]$objectid
+		)
+	$resturl = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $objectid
+	$restheaders = @{}
+	$restheaders.Add('Accept','application/'+$accept)
+	$restheaders.Add("X-vRealizeOps-API-use-unsupported","true")
+	Try {
+		$reponse = Invoke-RestMethod -Method 'DELETE' -Uri $resturl -Headers $restheaders -credential $credentials -ErrorAction Stop
+	}
+	Catch {
+		$Error[0].Exception.InnerException
+		return $_.Exception.Message	
+	}
+	return $reponse
+}
+
+
 
 export-modulemember -function 'updateAlertDefinition'
 export-modulemember -function 'getAlertDefinitionById'
@@ -796,3 +973,7 @@ export-modulemember -function 'set*'
 export-modulemember -function 'delete*'
 export-modulemember -function 'start*'
 export-modulemember -function 'acquire*'
+
+
+
+
