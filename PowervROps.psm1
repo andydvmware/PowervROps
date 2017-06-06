@@ -473,7 +473,7 @@ function addStats {
 		$resturl = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/stats'
 		$contenttype = 'application/' + $restcontenttype
 		Try {
-			$reponse = Invoke-RestMethod -Method 'POST' -Uri $resturl -Headers $restheaders -credential $credentials -body $body -contenttype $contenttype -ErrorAction Stop
+			$reponse = Invoke-WebRequest -Method 'POST' -Uri $resturl -Headers $restheaders -credential $credentials -body $body -contenttype $contenttype -ErrorAction Stop
 		}
 		Catch {
 			return $_.Exception.Message	
@@ -626,7 +626,8 @@ function startMonitoringResource {
 	$restheaders = @{}
 	$restheaders.Add('Accept','application/'+$responseformat)
 	$resturl = 'https://' + $resthost + '/suite-api/api/resources/' + $object + '/monitoringstate/start'
-	$response = Invoke-WebRequest -Method 'PUT' -Uri $resturl -credential $credentials -contenttype $restcontenttype -headers $restheaders	
+	$response = Invoke-WebRequest -Method 'PUT' -Uri $resturl -credential $credentials -contenttype $restcontenttype -headers $restheaders
+	return $response
 }
 function getResources { # NEED TO ADD ALL QUERY TYPES
 	<#
@@ -865,8 +866,9 @@ function createCustomGroup {
 	$restheaders.Add('Accept','application/'+$accept)
 	$restheaders.Add("X-vRealizeOps-API-use-unsupported","true")
 	$contenttype = 'application/' + $restcontenttype
+
 	Try {
-		$reponse = Invoke-RestMethod -Method 'POST' -Uri $resturl -Headers $restheaders -credential $credentials -body $body -contenttype $contenttype -ErrorAction Stop
+		$reponse = Invoke-WebRequest -Method 'POST' -Uri $resturl -Headers $restheaders -credential $credentials -body $body -contenttype $contenttype -ErrorAction Stop
 	}
 	Catch {
 		$Error[0].Exception.InnerException
