@@ -12,7 +12,8 @@ function setRestHeaders {
 Param	(
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',	
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$contenttype = 'json'
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$contenttype = 'json',
+		[parameter(Mandatory=$false)][ValidateSet($true,$false)][string]$useinternalapi = $false
 		
 		)
 $restheaders = @{}
@@ -22,9 +23,91 @@ $restheaders.Add('Content-Type','application/'+$contenttype)
 }
 if ($token -ne $null) {
 	$restheaders.Add('Authorization',('vRealizeOpsToken ' + $token))
+}
+if ($useinternalapi -eq $true) {
+	$restheaders.Add("X-vRealizeOps-API-use-unsupported","true")
 }		
 return $restheaders
 }
+
+function invokeRestMethod {
+	Param (
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)]$credentials,	
+		[parameter(Mandatory=$true)]$url,
+		[parameter(Mandatory=$true)][ValidateSet('GET','PUT','POST')][string]$method,
+		[parameter(Mandatory=$false)]$body,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',	
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$contenttype = 'json',
+		[parameter(Mandatory=$false)][ValidateSet($true,$false)][string]$useinternalapi = $false
+	)
+	if (($credentials -eq $null) -and ($token -eq $null)) {
+		return "No credentials or bearer token supplied"
+	}
+	elseif ($token -ne $null) {
+		if ($useinternalapi -eq $true) {
+			$restheaders = setRestHeaders -accept $accept -token $token -contenttype $contenttype -useinternalapi $true
+		}
+		else {
+			$restheaders = setRestHeaders -accept $accept -token $token -contenttype $contenttype
+		}
+	}
+	else {
+		if ($useinternalapi -eq $true) {
+			$restheaders = setRestHeaders -accept $accept -contenttype $contenttype -useinternalapi $true
+		}
+		else {
+			$restheaders = setRestHeaders -accept $accept -contenttype $contenttype
+		}
+	}
+	
+	if ($body -ne $null) {
+		if ($token -ne $null) {
+			Try {
+				$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -body $body -ErrorAction Stop
+				return $response
+			}
+			Catch {
+				return $_.Exception.Message	
+			}	
+		}
+		else {
+			Try {
+				$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -body $body -credential $credentials -ErrorAction Stop
+				return $response
+			}
+			Catch {
+				write-host $response
+				return $_.Exception.Message	
+			}
+		}
+	}
+	else {
+		if ($token -ne $null) {
+			Try {
+				$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -ErrorAction Stop
+				return $response
+			}
+			Catch {
+				return $_.Exception.Message	
+			}	
+		}
+		else {
+			Try {
+				$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -credential $credentials -ErrorAction Stop
+				return $response
+			}
+			Catch {
+				return $_.Exception.Message	
+			}
+		}
+	}	
+}
+function invokeWebRequest {
+}
+
+
+
 
 #/api/actiondefinitions
 
@@ -295,41 +378,70 @@ function createResourceUsingAdapterKind {
 	return $reponse
 }
 
-function Get-vROpsAdapterTypes {
-	<#
-	.SYNOPSIS
-		Creates a new Resource in the system associated with an existing adapter instance..
-	.DESCRIPTION
-		The API will create the missing Adapter Kind and Resource Kind contained within the ResourceKey of the Resource if they do not exist. The API will return an error if the adapter instance specified does not exist.
-		Additional implementation notes:
-		When creating a Resource, if the Resource Identifiers that are unique and required are not specified, the API would return an error with HTTP status code of 500 and an error message indicating the set of missing Resource Identifiers.
-		When creating a Resource, if the Resource Identifiers that are unique but not required are not specified, the Resource is created where the uniquely identifying Resource Identifiers that were not specified will have their value as an empty string. 
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		A set of PS credentials that are passed to the rest host for authentication during execution
-	.PARAMETER resthost
-		Fully qualified domain name of the vROps node/cluster that you are running the REST call against
-	.PARAMETER responseformat
-		Equivalent to the accept component of the header. The accepted values are xml or json (default)
-	#> 
+#function Get-vROpsAdapterTypes {
+	#<#
+	#.SYNOPSIS
+	#	Creates a new Resource in the system associated with an existing adapter instance..
+	#.DESCRIPTION
+#		The API will create the missing Adapter Kind and Resource Kind contained within the ResourceKey of the Resource if they do not exist. The API will return an error if the adapter instance specified does not exist.
+#		Additional implementation notes:
+#		When creating a Resource, if the Resource Identifiers that are unique and required are not specified, the API would return an error with HTTP status code of 500 and an error message indicating the set of missing #Re#source Identifiers.
+	#	When creating a Resource, if the Resource Identifiers that are unique but not required are not specified, the Resource is created where the uniquely identifying Resource Identifiers that were not specified will have #their value as an empty string. 
+	#.EXAMPLE
+	#	TBC
+	#.EXAMPLE
+	#	TBC
+	#.PARAMETER credentials
+	#	A set of PS credentials that are passed to the rest host for authentication during execution
+	#.PARAMETER resthost
+	#	Fully qualified domain name of the vROps node/cluster that you are running the REST call against
+	#.PARAMETER responseformat
+	#	Equivalent to the accept component of the header. The accepted values are xml or json (default)
+#	#> 
+	#Param	(
+	#	[parameter(Mandatory=$true)]$credentials,
+	#	[parameter(Mandatory=$true)][String]$resthost,
+	#	[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json'
+	#	)		
+#	$restheaders = @{}
+	#$restheaders.Add('Accept','application/'+$responseformat)
+	#$resturl = 'https://' + $resthost + '/suite-api/api/adapters'
+	#Try {
+	#	$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -credential $credentials -ErrorAction Stop
+	#}
+	#Catch {
+	#	return $_.Exception.Message	
+	#}
+	#return $reponse
+#}
+
+function enumerateAdapterInstances {
+
+	
+	
+	
+	
 	Param	(
-		[parameter(Mandatory=$true)]$credentials,
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json'
-		)		
-	$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$responseformat)
-	$resturl = 'https://' + $resthost + '/suite-api/api/adapters'
-	Try {
-		$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -credential $credentials -ErrorAction Stop
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'	
+		)
+	$url = 'https://' + $resthost + '/suite-api/api/adapters'
+	write-host $url
+	if ($token -ne $null) {
+		$enumerateAdapterInstancesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 	}
-	Catch {
-		return $_.Exception.Message	
-	}
-	return $reponse
+	else {
+		$enumerateAdapterInstancesresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+	}	
+	return $enumerateAdapterInstancesresponse
+	
+	
+	
+	
+	
+	
 }
 
 # /api/credentials
@@ -370,29 +482,25 @@ function addProperties {
 		TBC
 	#> 
 		Param	(
-		[parameter(Mandatory=$true)]$credentials,
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$true)][ValidateSet('xml','json')]$restcontenttype = 'json',
 		[parameter(Mandatory=$true)][String]$body,
-		[parameter(Mandatory=$true)][String]$object
+		[parameter(Mandatory=$true)][String]$id
 		)
-		
-	
-	$resturl = 'https://' + $resthost + '/suite-api/api/resources/' + $object + '/properties/'
-	$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$accept)
-	$contenttype = 'application/' + $restcontenttype
-	Try {
-		$reponse = Invoke-RestMethod -Method 'POST' -Uri $resturl -Headers $restheaders -credential $credentials -body $body -contenttype $contenttype -ErrorAction Stop
+	$url = 'https://' + $resthost + '/suite-api/api/resources/' + $id + '/properties/'
+	if ($token -ne $null) {
+		$addPropertiesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body -contenttype $restcontenttype
 	}
-	Catch {
-		$Error[0].Exception.InnerException
-		return $_.Exception.Message	
-	}
-	return $reponse	
-
+	else {
+		$addPropertiesresponse = invokeRestMethod -method 'POST' -url $url -credentials $credentials -body $body -contenttype $restcontenttype
+	}	
+	return $addPropertiesresponse
 }
+
+
 
 function addRelationship {
 	<#
@@ -561,6 +669,24 @@ function getRelationship {
 		return $_.Exception.Message	
 	}
 	return $reponse
+}
+function getResourceProperties {
+Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][string]$id	
+		)
+	$url = 'https://' + $resthost + '/suite-api/api/resources/' + $id + '/properties'
+	write-host $url
+	if ($token -ne $null) {
+		$getResourcePropertiesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+	}
+	else {
+		$getResourcePropertiesresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+	}	
+	return $getResourcePropertiesresponse
 }
 function deleteRelationship {
 	<#
@@ -799,7 +925,30 @@ function getSuperMetrics {
 
 
 # /internal/resources
+
 function getCustomGroup {
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][string]$id	
+		)
+	$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $id	
+	write-host $url
+	if ($token -ne $null) {
+		$getcustomgroupresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token -useinternalapi $true
+	}
+	else {
+		$getcustomgroupresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials -useinternalapi $true
+	}	
+	return $getcustomgroupresponse	
+}
+
+
+
+
+function getCustomGroups {
 	<#
 	.SYNOPSIS
 		TBC
@@ -975,6 +1124,7 @@ export-modulemember -function 'set*'
 export-modulemember -function 'delete*'
 export-modulemember -function 'start*'
 export-modulemember -function 'acquire*'
+export-modulemember -function 'enumerate*'
 
 
 
