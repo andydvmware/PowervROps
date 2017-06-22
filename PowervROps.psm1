@@ -111,7 +111,7 @@ function invokeWebRequest {
 
 #/api/actiondefinitions
 
-function getAllActions {
+function getAllActions { # Rewritten? No, Added Function Descriptions? No
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$false)]$token,
@@ -150,28 +150,8 @@ function getAllActions {
 # /api/alertdefinitions
 
 	
-function getAlertDefinitionById {
-	<#
-	.SYNOPSIS
-		Creates a new Resource in the system associated with an existing adapter instance..
-	.DESCRIPTION
-		The API will create the missing Adapter Kind and Resource Kind contained within the ResourceKey of the Resource if they do not exist. The API will return an error if the adapter instance specified does not exist.
-		Additional implementation notes:
-		When creating a Resource, if the Resource Identifiers that are unique and required are not specified, the API would return an error with HTTP status code of 500 and an error message indicating the set of missing Resource Identifiers.
-		When creating a Resource, if the Resource Identifiers that are unique but not required are not specified, the Resource is created where the uniquely identifying Resource Identifiers that were not specified will have their value as an empty string. 
-	.EXAMPLE
-		CreateResourceUsingAdapterKind -credentials [some PS credentials] -resthost 'myvropshost.local' -adapterKindKey 'VMWARE'
-	.EXAMPLE
-		CreateResourceUsingAdapterKind -credentials [some PS credentials] -resthost 'myvropshost.local' -adapterKindKey 'VMWARE' -responseformat 'json' -restcontettype 'json' -body [some body content xml/json]
-	.PARAMETER credentials
-		A set of PS credentials that are passed to the rest host for authentication during execution
-	.PARAMETER resthost
-		Fully qualified domain name of the vROps node/cluster that you are running the REST call against
-	.PARAMETER responseformat
-		Equivalent to the accept component of the header. The accepted values are xml or json (default)
-	.PARAMETER restcontenttype
-		The format of the body content. Accepted values are xml or json (default)
-	#> 
+function getAlertDefinitionById { # Rewritten? No, Added Function Descriptions? No
+
 	Param	(
 		[parameter(Mandatory=$true)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
@@ -190,31 +170,9 @@ function getAlertDefinitionById {
 	}
 	return $reponse
 }	
-function getAlertDefinitions {
 
-}
-function updateAlertDefinition {
-	<#
-	.SYNOPSIS
-		Creates a new Resource in the system associated with an existing adapter instance..
-	.DESCRIPTION
-		The API will create the missing Adapter Kind and Resource Kind contained within the ResourceKey of the Resource if they do not exist. The API will return an error if the adapter instance specified does not exist.
-		Additional implementation notes:
-		When creating a Resource, if the Resource Identifiers that are unique and required are not specified, the API would return an error with HTTP status code of 500 and an error message indicating the set of missing Resource Identifiers.
-		When creating a Resource, if the Resource Identifiers that are unique but not required are not specified, the Resource is created where the uniquely identifying Resource Identifiers that were not specified will have their value as an empty string. 
-	.EXAMPLE
-		CreateResourceUsingAdapterKind -credentials [some PS credentials] -resthost 'myvropshost.local' -adapterKindKey 'VMWARE'
-	.EXAMPLE
-		CreateResourceUsingAdapterKind -credentials [some PS credentials] -resthost 'myvropshost.local' -adapterKindKey 'VMWARE' -responseformat 'json' -restcontettype 'json' -body [some body content xml/json]
-	.PARAMETER credentials
-		A set of PS credentials that are passed to the rest host for authentication during execution
-	.PARAMETER resthost
-		Fully qualified domain name of the vROps node/cluster that you are running the REST call against
-	.PARAMETER responseformat
-		Equivalent to the accept component of the header. The accepted values are xml or json (default)
-	.PARAMETER restcontenttype
-		The format of the body content. Accepted values are xml or json (default)
-	#> 
+function updateAlertDefinition { # Rewritten? No, Added Function Descriptions? No
+
 	Param	(
 		[parameter(Mandatory=$true)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
@@ -247,7 +205,7 @@ function updateAlertDefinition {
 
 # /api/auth
 
-function acquireToken {
+function acquireToken { # Rewritten? Needs tidying up, Added Function Descriptions? No
 
 	Param	(
 
@@ -415,7 +373,7 @@ function createResourceUsingAdapterKind {
 	#return $reponse
 #}
 
-function enumerateAdapterInstances {
+function enumerateAdapterInstances {# Rewritten? Yes, Added Function Descriptions? No
 
 	
 	
@@ -462,7 +420,7 @@ function enumerateAdapterInstances {
 
 # /api/resources
 
-function addProperties {
+function addProperties { # Rewritten? Yes, Added Function Descriptions? No
 
 	<#
 	.SYNOPSIS
