@@ -1,5 +1,11 @@
-# PowervROps
-
+# |--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+# |                                                                                                               													   |
+# | Module Name: PowervROps.psm1                                                           																		  	   |
+# | Author: Andy Davies (andyd@vmware.com)                                                                        													   |
+# | Date: 27th June 2017                                                                                    														   |
+# | Description: PowerShell module that enables the use of the vROPs API via PowerShell cmdlets																		   |
+# | Version: 0.3.0                                                                                                  												   |
+# |--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 
 function getTimeSinceEpoch {
 
@@ -29,17 +35,17 @@ if ($useinternalapi -eq $true) {
 }		
 return $restheaders
 }
-
 function invokeRestMethod {
 	Param (
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$false)]$credentials,	
 		[parameter(Mandatory=$true)]$url,
-		[parameter(Mandatory=$true)][ValidateSet('GET','PUT','POST')][string]$method,
+		[parameter(Mandatory=$false)][ValidateSet('GET','PUT','POST')][string]$method,
 		[parameter(Mandatory=$false)]$body,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',	
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$contenttype = 'json',
-		[parameter(Mandatory=$false)][ValidateSet($true,$false)][string]$useinternalapi = $false
+		[parameter(Mandatory=$false)][ValidateSet($true,$false)][string]$useinternalapi = $false,
+		[parameter(Mandatory=$false)][int]$timeoutsec = 30
 	)
 	if (($credentials -eq $null) -and ($token -eq $null)) {
 		return "No credentials or bearer token supplied"
@@ -64,7 +70,7 @@ function invokeRestMethod {
 	if ($body -ne $null) {
 		if ($token -ne $null) {
 			Try {
-				$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -body $body -ErrorAction Stop
+				$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -body $body -timeoutsec $timeoutsec -ErrorAction Stop
 				return $response
 			}
 			Catch {
@@ -73,7 +79,7 @@ function invokeRestMethod {
 		}
 		else {
 			Try {
-				$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -body $body -credential $credentials -ErrorAction Stop
+				$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -body $body -credential $credentials -timeoutsec $timeoutsec -ErrorAction Stop
 				return $response
 			}
 			Catch {
@@ -85,7 +91,7 @@ function invokeRestMethod {
 	else {
 		if ($token -ne $null) {
 			Try {
-				$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -ErrorAction Stop
+				$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -timeoutsec $timeoutsec -ErrorAction Stop
 				return $response
 			}
 			Catch {
@@ -94,7 +100,7 @@ function invokeRestMethod {
 		}
 		else {
 			Try {
-				$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -credential $credentials -ErrorAction Stop
+				$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -credential $credentials -timeoutsec $timeoutsec -ErrorAction Stop
 				return $response
 			}
 			Catch {
@@ -106,92 +112,108 @@ function invokeRestMethod {
 function invokeWebRequest {
 }
 
-
-
-
 #/api/actiondefinitions
 
-function getAllActions { # Rewritten? No, Added Function Descriptions? No
+function getAllActions { # Rewritten? Yes, Added Function Descriptions? No
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
-		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'	
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
 		)
-	if (($credentials -eq $null) -and ($token -eq $null)) {
-		return "No credentials or bearer token supplied"
+		$url = 'https://' + $resthost + '/suite-api/api/actiondefinitions'
+		if ($token -ne $null) {
+		$getAllActionsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 	}
 	else {
-		$restheaders = setRestHeaders -accept $accept -token $token
-		$resturl = 'https://' + $resthost + '/suite-api/api/actiondefinitions'
-		Try {
-			$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -body $body -ErrorAction Stop
-		}
-		Catch {
-			return $_.Exception.Message	
-		}
-		return $reponse
-	}
+		$getAllActionsresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+	}	
+	return $getAllActionsresponse
 }
 
 #/api/actions
 
-
-
 # /api/adapterkinds
 
-
-
-
 # /api/adapters
-
-
 
 # /api/alertdefinitions
 
 	
-function getAlertDefinitionById { # Rewritten? No, Added Function Descriptions? No
+function getAlertDefinitionById { # Rewritten? YES, Added Function Descriptions? No
 
 	Param	(
-		[parameter(Mandatory=$true)]$credentials,
+		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json',
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$true)][String]$alertdefinitionid
-		)		
-	$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$responseformat)
-	$resturl = 'https://' + $resthost + '/suite-api/api/alertdefinitions/' + $alertdefinitionid
-	Try {
-		$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -credential $credentials -ErrorAction Stop
+		)
+	$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions/' + $alertdefinitionid		
+	#$restheaders = @{}
+	#$restheaders.Add('Accept','application/'+$responseformat)
+	#$resturl = 'https://' + $resthost + '/suite-api/api/alertdefinitions/' + $alertdefinitionid
+	if ($token -ne $null) {
+		$getAlertDefinitionByIdresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 	}
-	Catch {
-		$Error[0].Exception.InnerException
-		return $_.Exception.Message	
-	}
-	return $reponse
+	else {
+		$getAlertDefinitionByIdresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+	}	
+	return $getAlertDefinitionByIdresponse
+	
+	
+	
+	
+	#Try {
+	#	$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -credential $credentials -ErrorAction Stop
+	#}
+	#Catch {
+		#$Error[0].Exception.InnerException
+		#return $_.Exception.Message	
+	#}
+	#return $reponse
 }	
-
-function updateAlertDefinition { # Rewritten? No, Added Function Descriptions? No
-
+function getAlertDefinitions { # Rewritten? YES, Added Function Descriptions? No
 	Param	(
-		[parameter(Mandatory=$true)]$credentials,
+		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json',
-		[parameter(Mandatory=$true)][ValidateSet('xml','json')]$restcontenttype = 'json',
-		[parameter(Mandatory=$true)][String]$body
-		)		
-	$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$responseformat)
-	$contenttype = 'application/' + $restcontenttype
-	$resturl = 'https://' + $resthost + '/suite-api/api/alertdefinitions'
-	Try {
-		$reponse = Invoke-RestMethod -Method 'PUT' -Uri $resturl -Headers $restheaders -credential $credentials -body $body -contenttype $contenttype -ErrorAction Stop
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][String]$alertdefinitionid,
+		[parameter(Mandatory=$false)][String]$adapterkind,
+		[parameter(Mandatory=$false)][String]$resourcekind
+		)
+	if (($alertdefinitionid -ne "") -and (($adapterkind -ne "") -or ($resourcekind -ne ""))) {
+		write-host "alertdefinition" $alertdefintion
+		write-host "WARNING - When specifying an alert definition ID, an adapterkind or resourcekind are not necessary"
+		return
 	}
-	Catch {
-		$Error[0].Exception.InnerException
-		return $_.Exception.Message	
+	else {
+		if ($alertdefinitionid -ne "") {
+			$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions/?id=' + $alertdefinitionid
+		}
+		elseif ($adapterkind -ne "") {
+			if ($resourcekind -ne "") {
+				$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions/?adapterKind=' + $adapterkind + '&resourceKind=' + $resourcekind 
+			}
+			else {
+				$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions/?adapterKind=' + $adapterkind
+			}
+		}
+		elseif ($resourcekind -ne "") {
+			$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions/?resourceKind=' + $resourcekind 
+		}
+		else {
+			$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions'
+		}
+		if ($token -ne $null) {
+			$getAlertDefinitionsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getAlertDefinitionsresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+		}	
+		return $getAlertDefinitionsresponse
 	}
-	return $reponse
 }
 
 
@@ -202,21 +224,55 @@ function updateAlertDefinition { # Rewritten? No, Added Function Descriptions? N
 	
 # /api/alerts	
 
+function getAlert { # Rewritten? YES, Added Function Descriptions? No
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)]$alertid
+	)
+	$url = 'https://' + $resthost + '/suite-api/api/alerts/' + $alertid
+	if ($token -ne $null) {
+		$getAlertresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+	}
+	else {
+		$getAlertresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+	}	
+	return $getAlertresponse
+}
+function getAlerts { # Need to add ID and resourceID parameters and logic,........... Rewritten? YES, Added Function Descriptions? No
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		# ID
+		# resourceID
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
+	)
+
+$url = 'https://' + $resthost + '/suite-api/api/alerts'
+	if ($token -ne $null) {
+		$getAlertsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+	}
+	else {
+		$getAlertsresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+	}	
+	return $getAlertsresponse
+}
+
 
 # /api/auth
 
 function acquireToken { # Rewritten? Needs tidying up, Added Function Descriptions? No
-
 	Param	(
-
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$contenttype = 'json',
 		[parameter(Mandatory=$false)][string]$username,
 		[parameter(Mandatory=$false)][string]$authSource,
 		[parameter(Mandatory=$false)][string]$password
-
-		)		
+	)		
 	$restheaders = @{}
 	$restheaders.Add('Accept','application/'+$accept)
 	$restheaders.Add('Content-Type','application/'+$contenttype)
@@ -236,58 +292,69 @@ function acquireToken { # Rewritten? Needs tidying up, Added Function Descriptio
 		return $_.Exception.Message	
 	}
 	return $reponse.token
-
-
 }
 
 # /api/collectorgroups
 
 
 # /api/collectors
-# ---------------
 
-
-
-function getCollectors {
-
-Param	(
-		[parameter(Mandatory=$true)]$credentials,
+function getAdaptersOnCollector { # Rewritten? Yes, Added Function Descriptions? No
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json'
-		)
-$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$responseformat)		
-	$resturl = 'https://' + $resthost + '/suite-api/api/collectors'
-	Try {
-		$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -credential $credentials -body $body -contenttype $contenttype -ErrorAction Stop
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)]$id
+	)
+	$url = 'https://' + $resthost + '/suite-api/api/collectors/' + $id + '/adapters'
+	if ($token -ne $null) {
+		$getAdaptersOnCollectorresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 	}
-	Catch {
-		$Error[0].Exception.InnerException
-		return $_.Exception.Message	
+	else {
+		$getAdaptersOnCollectorresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+	}	
+	return $getAdaptersOnCollectorresponse
+}
+function getCollectors { # need to add in host as a parameter................... Rewritten? Yes, Added Function Descriptions? No
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
+		# need to add in host as a parameter
+	)
+	$url = 'https://' + $resthost + '/suite-api/api/collectors'
+	if ($token -ne $null) {
+		$getCollectorsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 	}
+	else {
+		$getCollectorsresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+	}	
+	return $getCollectorsresponse
 }
 
 # /api/credentialkinds
 
-function getCredentialKinds {
+function getCredentialKinds { # Rewritten? Yes, Added Function Descriptions? No
 Param	(
-		[parameter(Mandatory=$true)]$credentials,
+		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json'
-		)
-$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$responseformat)		
-	$resturl = 'https://' + $resthost + '/suite-api/api/credentialkinds'
-	Try {
-		$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -credential $credentials -body $body -contenttype $contenttype -ErrorAction Stop
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
+	)
+		
+	$url = 'https://' + $resthost + '/suite-api/api/credentialkinds'
+	
+	if ($token -ne $null) {
+		$getCredentialKindsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 	}
-	Catch {
-		$Error[0].Exception.InnerException
-		return $_.Exception.Message	
-	}
+	else {
+		$getCredentialKindsresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+	}	
+	return $getCredentialKindsresponse
 }
-
-function createResourceUsingAdapterKind {
+function createResourceUsingAdapterKind { # Rewritten? NO, Added Function Descriptions? No
 	<#
 	.SYNOPSIS
 		Creates a new Resource in the system associated with an existing adapter instance..
@@ -335,50 +402,7 @@ function createResourceUsingAdapterKind {
 	}
 	return $reponse
 }
-
-#function Get-vROpsAdapterTypes {
-	#<#
-	#.SYNOPSIS
-	#	Creates a new Resource in the system associated with an existing adapter instance..
-	#.DESCRIPTION
-#		The API will create the missing Adapter Kind and Resource Kind contained within the ResourceKey of the Resource if they do not exist. The API will return an error if the adapter instance specified does not exist.
-#		Additional implementation notes:
-#		When creating a Resource, if the Resource Identifiers that are unique and required are not specified, the API would return an error with HTTP status code of 500 and an error message indicating the set of missing #Re#source Identifiers.
-	#	When creating a Resource, if the Resource Identifiers that are unique but not required are not specified, the Resource is created where the uniquely identifying Resource Identifiers that were not specified will have #their value as an empty string. 
-	#.EXAMPLE
-	#	TBC
-	#.EXAMPLE
-	#	TBC
-	#.PARAMETER credentials
-	#	A set of PS credentials that are passed to the rest host for authentication during execution
-	#.PARAMETER resthost
-	#	Fully qualified domain name of the vROps node/cluster that you are running the REST call against
-	#.PARAMETER responseformat
-	#	Equivalent to the accept component of the header. The accepted values are xml or json (default)
-#	#> 
-	#Param	(
-	#	[parameter(Mandatory=$true)]$credentials,
-	#	[parameter(Mandatory=$true)][String]$resthost,
-	#	[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json'
-	#	)		
-#	$restheaders = @{}
-	#$restheaders.Add('Accept','application/'+$responseformat)
-	#$resturl = 'https://' + $resthost + '/suite-api/api/adapters'
-	#Try {
-	#	$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -credential $credentials -ErrorAction Stop
-	#}
-	#Catch {
-	#	return $_.Exception.Message	
-	#}
-	#return $reponse
-#}
-
 function enumerateAdapterInstances {# Rewritten? Yes, Added Function Descriptions? No
-
-	
-	
-	
-	
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$false)]$token,
@@ -386,25 +410,59 @@ function enumerateAdapterInstances {# Rewritten? Yes, Added Function Description
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'	
 		)
 	$url = 'https://' + $resthost + '/suite-api/api/adapters'
-	write-host $url
 	if ($token -ne $null) {
 		$enumerateAdapterInstancesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 	}
 	else {
 		$enumerateAdapterInstancesresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
 	}	
-	return $enumerateAdapterInstancesresponse
-	
-	
-	
-	
-	
-	
+	return $enumerateAdapterInstancesresponse	
 }
 
 # /api/credentials
 
+function getCredentials { # Need to do ID and AdapterKind filters....... Rewritten? Yes, Added Function Descriptions? No
+Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
+		# ID
+		# AdapterKind
+	)
+	$url = 'https://' + $resthost + '/suite-api/api/credentials'
+	if ($token -ne $null) {
+		$getCredentialsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+	}
+	else {
+		$getCredentialsresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+	}	
+	return $getCredentialsresponse
+}
+
 # /api/deployment
+
+function getLicenceKeysForProduct { # Rewritten? Yes, Added Function Descriptions? No
+Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
+	)
+	$url = 'https://' + $resthost + '/suite-api/api/deployment/licenses'
+	if ($token -ne $null) {
+		$getLicenceKeysForProductresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+	}
+	else {
+		$getLicenceKeysForProductresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+	}	
+	return $getLicenceKeysForProductresponse
+
+
+
+
+
+}
 
 # /api/events
 
@@ -421,7 +479,6 @@ function enumerateAdapterInstances {# Rewritten? Yes, Added Function Description
 # /api/resources
 
 function addProperties { # Rewritten? Yes, Added Function Descriptions? No
-
 	<#
 	.SYNOPSIS
 		TBC
@@ -457,10 +514,7 @@ function addProperties { # Rewritten? Yes, Added Function Descriptions? No
 	}	
 	return $addPropertiesresponse
 }
-
-
-
-function addRelationship {
+function addRelationship { # Rewritten? No, Added Function Descriptions? No
 	<#
 	.SYNOPSIS
 		Add relationships of given type to the resource with specified resourceId. 
@@ -506,9 +560,7 @@ function addRelationship {
 		}
 		return $reponse
 }
-
-
-function addStats {
+function addStats { # Rewritten? No, Added Function Descriptions? No
 	<#
 	.SYNOPSIS
 		TBC
@@ -547,9 +599,7 @@ function addStats {
 		return $reponse
 
 }
-
-
-function setRelationship {
+function setRelationship { # Rewritten? No, Added Function Descriptions? No
 	<#
 	.SYNOPSIS
 		TBC
@@ -591,7 +641,7 @@ function setRelationship {
 		}
 		return $reponse
 }
-function getRelationship {
+function getRelationship { # Rewritten? No, Added Function Descriptions? No
 	<#
 	.SYNOPSIS
 		TBC
@@ -628,7 +678,7 @@ function getRelationship {
 	}
 	return $reponse
 }
-function getResourceProperties {
+function getResourceProperties { # Rewritten? Yes, Added Function Descriptions? No
 Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$false)]$token,
@@ -637,7 +687,6 @@ Param	(
 		[parameter(Mandatory=$false)][string]$id	
 		)
 	$url = 'https://' + $resthost + '/suite-api/api/resources/' + $id + '/properties'
-	write-host $url
 	if ($token -ne $null) {
 		$getResourcePropertiesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 	}
@@ -646,7 +695,7 @@ Param	(
 	}	
 	return $getResourcePropertiesresponse
 }
-function deleteRelationship {
+function deleteRelationship { # Rewritten? No, Added Function Descriptions? No
 	<#
 	.SYNOPSIS
 		TBC
@@ -683,7 +732,7 @@ function deleteRelationship {
 	}
 	return $reponse
 }
-function startMonitoringResource {
+function startMonitoringResource { # Rewritten? No, Added Function Descriptions? No
 	<#
 	.SYNOPSIS
 		TBC
@@ -713,7 +762,7 @@ function startMonitoringResource {
 	$response = Invoke-WebRequest -Method 'PUT' -Uri $resturl -credential $credentials -contenttype $restcontenttype -headers $restheaders
 	return $response
 }
-function getResources { # NEED TO ADD ALL QUERY TYPES
+function getResources { # NEED TO ADD ALL QUERY TYPES # Rewritten? No, Added Function Descriptions? No
 	<#
 	.SYNOPSIS
 		TBC
@@ -754,61 +803,7 @@ function getResources { # NEED TO ADD ALL QUERY TYPES
 
 
 }
-function getStatsForResource { # NOT COMPLETE
-	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		TBC
-	.PARAMETER resthost
-		TBC
-	.PARAMETER responseformat
-		TBC
-	#>
-	Param	(
-		[parameter(Mandatory=$true)]$credentials,
-		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json',
-		[parameter(Mandatory=$true)][String]$objectID,
-		[parameter(Mandatory=$true)][String]$statkey,
-		[parameter(Mandatory=$true)][String]$begin,
-		[parameter(Mandatory=$true)][String]$end,
-		[parameter(Mandatory=$true)][String]$rolluptype,
-		[parameter(Mandatory=$true)][String]$intervaltype,
-		[parameter(Mandatory=$false)][String]$intervalQuantifier,
-		[parameter(Mandatory=$true)][String]$dynamicthresholds,
-		[parameter(Mandatory=$true)][String]$maxsamples
-		
-		
 
-	
-		)
-
-
-$body = @{
-	'resouceId' = @($objectID)
-	'statKey' = @($statkey)
-	'begin' = $begin
-	'end' = $end
-	'rollUpType' = $rolluptype
-	'intervalType' = $intervaltype
-	'intervalQuantifier' = $intervalQuantifier
-	'dt' = $dynamicthresholds
-	'latestMaxSamples' = $maxsamples
-
-
-} | convertto-json
-
-$body
-
-}
 # /api/solutions
 
 
@@ -816,7 +811,7 @@ $body
 # /api/supermetrics
 
 
-function getSuperMetric {
+function getSuperMetric { # Rewritten? No, Added Function Descriptions? No
 Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$false)]$token,
@@ -839,8 +834,7 @@ Param	(
 		return $reponse
 	}
 }
-
-function getSuperMetrics {
+function getSuperMetrics { # Rewritten? No, Added Function Descriptions? No
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$false)]$token,
@@ -884,7 +878,7 @@ function getSuperMetrics {
 
 # /internal/resources
 
-function getCustomGroup {
+function getCustomGroup { # Rewritten? Yes, Added Function Descriptions? No
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$false)]$token,
@@ -893,7 +887,6 @@ function getCustomGroup {
 		[parameter(Mandatory=$false)][string]$id	
 		)
 	$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $id	
-	write-host $url
 	if ($token -ne $null) {
 		$getcustomgroupresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token -useinternalapi $true
 	}
@@ -902,11 +895,7 @@ function getCustomGroup {
 	}	
 	return $getcustomgroupresponse	
 }
-
-
-
-
-function getCustomGroups {
+function getCustomGroups { # Rewritten? No, Added Function Descriptions? No
 	<#
 	.SYNOPSIS
 		TBC
@@ -942,8 +931,7 @@ function getCustomGroups {
 	}
 	return $reponse	
 }
-
-function createCustomGroup {
+function createCustomGroup { # Rewritten? No, Added Function Descriptions? No
 	<#
 	.SYNOPSIS
 		TBC
@@ -984,8 +972,7 @@ function createCustomGroup {
 	return $reponse	
 
 }
-
-function getMembersOfGroup {
+function getMembersOfGroup { # Rewritten? No, Added Function Descriptions? No
 
 
 
@@ -1032,8 +1019,7 @@ Param	(
 
 
 }
-
-function deleteCustomGroup {
+function deleteCustomGroup { # Rewritten? No, Added Function Descriptions? No
 	<#
 	.SYNOPSIS
 		TBC
