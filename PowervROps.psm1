@@ -476,6 +476,53 @@ Param	(
 
 # /api/reports
 
+function createReport { # Rewritten? Yes, Added Function Descriptions? No
+Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][String]$id,
+		[parameter(Mandatory=$true)][String]$reportid
+	)
+		
+	$url = 'https://' + $resthost + '/suite-api/api/reports'
+	
+	
+	$body = @{
+		'id'=$null
+		'resourceId'=$id
+		'reportDefinitionId'=$reportid
+		'traversalSpec'=@{
+			'name'='Custom Groups'
+			'rootAdapterKindKey'='?'
+			'rootResourceKindKey'='?'
+			'adapterInstanceAssociation'=$false
+			'others'=@()
+			'otherAttributes'=@{}
+			}
+		'subject'=@()
+		'others'=@()
+		'otherAttributes'=@{}
+	} | convertto-json -depth 5
+	
+	
+
+	if ($token -ne $null) {
+		$getCredentialKindsresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body
+	}
+	else {
+		$getCredentialKindsresponse = invokeRestMethod -method 'POST' -url $url -credentials $credentials -body $body
+	}	
+	return $getCredentialKindsresponse
+}
+
+
+
+
+
+
+
 # /api/resources
 
 function addProperties { # Rewritten? Yes, Added Function Descriptions? No
@@ -599,6 +646,38 @@ function addStats { # Rewritten? No, Added Function Descriptions? No
 		return $reponse
 
 }
+
+
+function getLatestStatsofResources { # Rewritten? Yes, Added Function Descriptions? No	
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][string]$object,	
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)]$statkey
+		)	
+	$url = 'https://' + $resthost + '/suite-api/api/resources/stats/latest?resourceId=' + $object + '&statKey=' + $statkey
+	# write-host $url
+	if ($token -ne $null) {
+		$getLatestStatsofResourcesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+	}
+	else {
+		$getLatestStatsofResourcesresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+	}
+
+	return $getLatestStatsofResourcesresponse	
+	
+	
+
+
+
+
+
+}
+
+
+
 function setRelationship { # Rewritten? No, Added Function Descriptions? No
 	<#
 	.SYNOPSIS
@@ -641,42 +720,23 @@ function setRelationship { # Rewritten? No, Added Function Descriptions? No
 		}
 		return $reponse
 }
-function getRelationship { # Rewritten? No, Added Function Descriptions? No
-	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		TBC
-	.PARAMETER resthost
-		TBC
-	.PARAMETER responseformat
-		TBC
-	#>
+function getRelationship { # Rewritten? Yes, Added Function Descriptions? No	
 	Param	(
-		[parameter(Mandatory=$true)]$credentials,
+		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json',
-		[parameter(Mandatory=$true)][String]$object,
-		[parameter(Mandatory=$true)][ValidateSet('children','parents')][String]$relationship
-		)
-	$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$responseformat)
-	$resturl = 'https://' + $resthost + '/suite-api/api/resources/' + $object + '/relationships/' + $relationship
-	$resturl
-	Try {
-		$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -credential $credentials -ErrorAction Stop
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][string]$object,	
+		[parameter(Mandatory=$true)][ValidateSet('children','parents')][String]$relationship,
+		[parameter(Mandatory=$false)]$token
+		)	
+	$url = 'https://' + $resthost + '/suite-api/api/resources/' + $object + '/relationships/' + $relationship
+	if ($token -ne $null) {
+		$getRelationshipresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 	}
-	Catch {
-		return $_.Exception.Message	
-	}
-	return $reponse
+	else {
+		$getRelationshipresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+	}	
+	return $getRelationshipresponse	
 }
 function getResourceProperties { # Rewritten? Yes, Added Function Descriptions? No
 Param	(
@@ -762,44 +822,30 @@ function startMonitoringResource { # Rewritten? No, Added Function Descriptions?
 	$response = Invoke-WebRequest -Method 'PUT' -Uri $resturl -credential $credentials -contenttype $restcontenttype -headers $restheaders
 	return $response
 }
-function getResources { # NEED TO ADD ALL QUERY TYPES # Rewritten? No, Added Function Descriptions? No
-	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		TBC
-	.PARAMETER resthost
-		TBC
-	.PARAMETER responseformat
-		TBC
-	#> 
+function getResources { # NEED TO ADD ALL QUERY TYPES # Rewritten? Yes, Added Function Descriptions? No
 	Param	(
-		[parameter(Mandatory=$true)]$credentials,
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json',
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$false)][String]$name,
-		[parameter(Mandatory=$false)][String]$resourceKind
-		)
-	$resturl = 'https://' + $resthost + '/suite-api/api/resources?name=' + $name + '&resourceKind=' + $resourceKind
-	$resturl
-	$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$responseformat)
-	Try {
-		$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -credential $credentials -ErrorAction Stop 
+		[parameter(Mandatory=$false)][String]$resourceKind,
+		[parameter(Mandatory=$false)][string]$id	
+		)	
+	$url = 'https://' + $resthost + '/suite-api/api/resources?'
+	if ($name -ne $null) {
+		$url += 'name=' + $name + '&'
 	}
-	Catch {
-		return $_.Exception.Message	
+	if ($resourceKind -ne $null) {
+		$url += '&resourceKind=' + $resourceKind
 	}
-	return $reponse
-
-
+	if ($token -ne $null) {
+		$getResourcesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+	}
+	else {
+		$getResourcesresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+	}	
+	return $getResourcesresponse
 
 
 }
