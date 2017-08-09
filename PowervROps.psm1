@@ -3,7 +3,7 @@
 # | Author: Andy Davies (andyd@vmware.com)                                                                        			   |
 # | Date: 9th August 2017                                                                                    				   |
 # | Description: PowerShell module that enables the use of the vROPs API via PowerShell cmdlets								   |
-# | Version: 0.3.5                                                                                                  		   |
+# | Version: 0.3.6                                                                                                 		   |
 # |----------------------------------------------------------------------------------------------------------------------------|
 
 function getTimeSinceEpoch {
@@ -1560,7 +1560,7 @@ function getResource {
 		return $getResourceresponse
 	}
 }
-function markResourceAsBeingMaintained {
+function markResourceAsBeingMaintained { # no test, and documentation incomplete
 	<#
 		.SYNOPSIS
 			TBC
@@ -1615,8 +1615,7 @@ function markResourceAsBeingMaintained {
 		return $markResourceAsBeingMaintainedresponse
 	}
 }
-
-function unmarkResourceAsBeingMaintained {
+function unmarkResourceAsBeingMaintained { # no test, and docuemntation incomplete
 	<#
 		.SYNOPSIS
 			TBC
@@ -1663,6 +1662,26 @@ function unmarkResourceAsBeingMaintained {
 		return $unmarkResourceAsBeingMaintainedresponse
 	}
 }
+function getStatsForResources { # No test, and no documentation
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$true)]$body,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/stats/query'
+		if ($token -ne $null) {
+			$getStatsForResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body
+		}
+		else {
+			$getStatsForResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -body $body
+		}	
+		return $getStatsForResourcesresponse
+	}
+}
+
 # /api/solutions --------------------------------------------------------------------------------------------------------------
 
 # /api/supermetrics -----------------------------------------------------------------------------------------------------------
