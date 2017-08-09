@@ -1,147 +1,338 @@
-# |--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-# |                                                                                                               													   |
-# | Module Name: PowervROps.psm1                                                           																		  	   |
-# | Author: Andy Davies (andyd@vmware.com)                                                                        													   |
-# | Date: 27th June 2017                                                                                    														   |
-# | Description: PowerShell module that enables the use of the vROPs API via PowerShell cmdlets																		   |
-# | Version: 0.3.0                                                                                                  												   |
-# |--------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+# |----------------------------------------------------------------------------------------------------------------------------|
+# | Module Name: PowervROps.psm1                                                           									   |
+# | Author: Andy Davies (andyd@vmware.com)                                                                        			   |
+# | Date: 9th August 2017                                                                                    				   |
+# | Description: PowerShell module that enables the use of the vROPs API via PowerShell cmdlets								   |
+# | Version: 0.3.5                                                                                                  		   |
+# |----------------------------------------------------------------------------------------------------------------------------|
 
 function getTimeSinceEpoch {
-
-$epoch = (get-date -Date "01/01/1970").ToUniversalTime()
-$timenow = (get-date).ToUniversalTime()
-$timesinceepoch = [math]::floor(($timenow - $epoch).TotalMilliseconds)
-return $timesinceepoch
+	<#
+		.SYNOPSIS
+			Function to obtain the current time in milliseconds since the Unix epoch
+		.DESCRIPTION
+			Function used by other functions in the module to convert either the current date/time
+			or a previous date/time into milliseconds since the Unix epoch which is what vROps uses
+			for all of its time calculations
+		.EXAMPLE
+			getTimeSinceEpoch
+		.EXAMPLE
+			getTimeSinceEpoch -date (get-date -day 12 -month 06 -year 2016 -hour 14 -minute 50 -second 30)
+		.EXAMPLE
+			getTimeSinceEpoch -date $somepreviousvariable
+		.PARAMETER date
+			PowerShell date object
+		.NOTES
+			Added in version 0.1
+			Updated to include date argument in 0.3.5
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$date
+		)
+	process {
+		$epoch = (get-date -Date "01/01/1970").ToUniversalTime()
+		if ($date -eq $null) {
+			$referencetime = (get-date).ToUniversalTime()
+		}
+		else {
+			$referencetime = $date.ToUniversalTime()
+		}
+		$timesinceepoch = [math]::floor(($referencetime - $epoch).TotalMilliseconds)
+		return $timesinceepoch	
+	}
 }
 function setRestHeaders {
-Param	(
+	<#
+		.SYNOPSIS
+			Function to set the rest headers to allow rest methods to be executed
+		.DESCRIPTION
+			To enable standardisation of execution, all of the functions that are performing
+			tasks on the vROps instance use standard means of performing that execution.
+			These functions (invokeRestMethod & invokeWebRequest) need certain headers setting
+			based on the format that requests and responses are executed but also because there
+			certain calls which require a special header value to be set
+		.EXAMPLE
+			setRestHeaders -accept json -token $token -contenttype json
+		.EXAMPLE
+			setRestHeaders -accept json -contenttype json -useinternalapi $true
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER contenttype
+			Analogous to the header parameter 'Content-Type' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER useinternalapi
+			Used only by functions that are accessing vROps internal api. This sets the value of the header
+			parameter 'X-vRealizeOps-API-use-unsupported' to 'true'.
+		.NOTES
+			Added in version 0.3
+	#>
+	Param	(
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',	
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$contenttype = 'json',
 		[parameter(Mandatory=$false)][ValidateSet($true,$false)][string]$useinternalapi = $false
 		
 		)
-$restheaders = @{}
-$restheaders.Add('Accept','application/'+$accept)
-if ($contenttype -ne $null) {
-$restheaders.Add('Content-Type','application/'+$contenttype)
-}
-if ($token -ne $null) {
-	$restheaders.Add('Authorization',('vRealizeOpsToken ' + $token))
-}
-if ($useinternalapi -eq $true) {
-	$restheaders.Add("X-vRealizeOps-API-use-unsupported","true")
-}		
-return $restheaders
+	Process {
+		$restheaders = @{}
+		$restheaders.Add('Accept','application/'+$accept)
+		if ($contenttype -ne $null) {
+			$restheaders.Add('Content-Type','application/'+$contenttype)
+		}
+		if ($token -ne $null) {
+			$restheaders.Add('Authorization',('vRealizeOpsToken ' + $token))
+		}
+		if ($useinternalapi -eq $true) {
+			$restheaders.Add("X-vRealizeOps-API-use-unsupported","true")
+		}		
+		return $restheaders
+	}
 }
 function invokeRestMethod {
+	<#
+		.SYNOPSIS
+			Function to invoke the rest method, from other functions within the module
+		.DESCRIPTION
+			To standardise the module, all functions use the invokeRestMethod for the actual
+			rest call.
+		.EXAMPLE
+			invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		.EXAMPLE
+			invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		.EXAMPLE
+			invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -contenttype $contenttype -body $body
+		.EXAMPLE
+			invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -contenttype $contenttype -body $body
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER url
+			The url against which the request will be performed. This will be passed to the cmdlet by the originating
+			request and does not need any user modification.
+		.PARAMETER method
+			The request type, valid values are (currently) 'GET', 'PUT', 'POST', 'DELETE'
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER contenttype
+			Analogous to the header parameter 'Content-Type' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER useinternalapi
+			Used only by functions that are accessing vROps internal api. This sets the value of the header
+			parameter 'X-vRealizeOps-API-use-unsupported' to 'true'.
+		.PARAMETER timeoutsec
+			Number of seconds to wait before timing out the request
+		.NOTES
+			Added in version 0.3
+	#>
 	Param (
-		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$false)]$credentials,	
+		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)]$url,
-		[parameter(Mandatory=$false)][ValidateSet('GET','PUT','POST')][string]$method,
+		[parameter(Mandatory=$false)][ValidateSet('GET','PUT','POST','DELETE')][string]$method,
 		[parameter(Mandatory=$false)]$body,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',	
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$contenttype = 'json',
 		[parameter(Mandatory=$false)][ValidateSet($true,$false)][string]$useinternalapi = $false,
 		[parameter(Mandatory=$false)][int]$timeoutsec = 30
 	)
-	if (($credentials -eq $null) -and ($token -eq $null)) {
-		return "No credentials or bearer token supplied"
-	}
-	elseif ($token -ne $null) {
-		if ($useinternalapi -eq $true) {
-			$restheaders = setRestHeaders -accept $accept -token $token -contenttype $contenttype -useinternalapi $true
+	Process {
+		if (($credentials -eq $null) -and ($token -eq $null)) {
+			return "No credentials or bearer token supplied"
+		}
+		elseif ($token -ne $null) {
+			if ($useinternalapi -eq $true) {
+				$restheaders = setRestHeaders -accept $accept -token $token -contenttype $contenttype -useinternalapi $true
+			}
+			else {
+				$restheaders = setRestHeaders -accept $accept -token $token -contenttype $contenttype
+			}
 		}
 		else {
-			$restheaders = setRestHeaders -accept $accept -token $token -contenttype $contenttype
+			if ($useinternalapi -eq $true) {
+				$restheaders = setRestHeaders -accept $accept -contenttype $contenttype -useinternalapi $true
+			}
+			else {
+				$restheaders = setRestHeaders -accept $accept -contenttype $contenttype
+			}
 		}
-	}
-	else {
-		if ($useinternalapi -eq $true) {
-			$restheaders = setRestHeaders -accept $accept -contenttype $contenttype -useinternalapi $true
+		if ($body -ne $null) {
+			if ($token -ne $null) {
+				Try {
+
+					$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -body $body -timeoutsec $timeoutsec -ErrorAction Stop
+					return $response
+				}
+				Catch {
+					
+			return $_.Exception.Message
+				}	
+			}
+			else {
+				Try {
+					$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -body $body -credential $credentials -timeoutsec $timeoutsec -ErrorAction Stop
+					return $response
+				}
+				Catch {
+
+			return $_.Exception.Message	
+				}
+			}
 		}
 		else {
-			$restheaders = setRestHeaders -accept $accept -contenttype $contenttype
-		}
-	}
-	
-	if ($body -ne $null) {
-		if ($token -ne $null) {
-			Try {
-				$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -body $body -timeoutsec $timeoutsec -ErrorAction Stop
-				return $response
+			if ($token -ne $null) {
+				Try {
+					$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -timeoutsec $timeoutsec -ErrorAction Stop
+					return $response
+				}
+				Catch {
+
+			return $_.Exception.Message
+				}	
 			}
-			Catch {
-				return $_.Exception.Message	
-			}	
-		}
-		else {
-			Try {
-				$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -body $body -credential $credentials -timeoutsec $timeoutsec -ErrorAction Stop
-				return $response
-			}
-			Catch {
-				write-host $response
-				return $_.Exception.Message	
+			else {
+				Try {
+					$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -credential $credentials -timeoutsec $timeoutsec -ErrorAction Stop
+					return $response
+				}
+				Catch {
+			return $_.Exception.Message
+				}
 			}
 		}
 	}
-	else {
-		if ($token -ne $null) {
-			Try {
-				$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -timeoutsec $timeoutsec -ErrorAction Stop
-				return $response
-			}
-			Catch {
-				return $_.Exception.Message	
-			}	
-		}
-		else {
-			Try {
-				$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -credential $credentials -timeoutsec $timeoutsec -ErrorAction Stop
-				return $response
-			}
-			Catch {
-				return $_.Exception.Message	
-			}
-		}
-	}	
-}
-function invokeWebRequest {
 }
 
-#/api/actiondefinitions
+#/api/actiondefinitions -------------------------------------------------------------------------------------------------------
 
-function getAllActions { # Rewritten? Yes, Added Function Descriptions? No
+function getAllActions {
+	<#
+		.SYNOPSIS
+			Look up all Action Definitions in the system.
+		.DESCRIPTION
+			Executing will query for all available Actions defined in the system.
+			This includes the data needed to populate an Action in the system.
+		.EXAMPLE
+			getAllActions -token $validtoken -resthost 'fqdn of vROps instance' -accept json
+		.EXAMPLE
+			getAllActions -credentials $validpscredentials -resthost 'fqdn of vROps instance' -accept xml
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.NOTES
+			Added in version 0.3
+	#>
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
-		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
-		)
+	)
+	Process {
 		$url = 'https://' + $resthost + '/suite-api/api/actiondefinitions'
 		if ($token -ne $null) {
-		$getAllActionsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+			$getAllActionsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getAllActionsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getAllActionsresponse
 	}
-	else {
-		$getAllActionsresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
-	}	
-	return $getAllActionsresponse
 }
 
-#/api/actions
+# /api/actions ----------------------------------------------------------------------------------------------------------------
 
-# /api/adapterkinds
+# /api/adapterkinds -----------------------------------------------------------------------------------------------------------
 
-# /api/adapters
+# /api/adapters ---------------------------------------------------------------------------------------------------------------
 
-# /api/alertdefinitions
+function enumerateAdapterInstances {
+	<#
+		.SYNOPSIS
+			Returns all the adapter instance resources in the system.
+		.DESCRIPTION
+			Returns all the adapter instance resources in the system.
+		.EXAMPLE
+			enumerateAdapterInstances -resthost $resthost -token $token
+		.EXAMPLE
+			enumerateAdapterInstances -resthost $resthost -token $token -adapterKindKey VMWARE
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER adapterKindKey
+			The name of the adapter type to filter
+		.NOTES
+			Added in version 0.2
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)]$adapterKindKey
+		)
+	Process {
+		if ($adapterKindKey -ne $null) {
+			$url = 'https://' + $resthost + '/suite-api/api/adapters?adapterKindKey=' + $adapterKindKey
+		}
+		else {
+			$url = 'https://' + $resthost + '/suite-api/api/adapters'
+		}
+		if ($token -ne $null) {
+			$enumerateAdapterInstancesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$enumerateAdapterInstancesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $enumerateAdapterInstancesresponse
+	}
+}
 
+# /api/alertdefinitions -------------------------------------------------------------------------------------------------------
 	
-function getAlertDefinitionById { # Rewritten? YES, Added Function Descriptions? No
-
+function getAlertDefinitionById {
+	<#
+		.SYNOPSIS
+			Gets Alert Definition using the identifier specified.
+		.DESCRIPTION
+			Gets Alert Definition using the identifier specified.
+		.EXAMPLE
+			getAlertDefinitionById -resthost $resthost -token $token -alertdefinitionid $alertdefinitionid
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER alertdefinitionid
+			The vROps ID of the alert definition
+		.NOTES
+			Added in version 0.2
+	#>
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
@@ -150,30 +341,44 @@ function getAlertDefinitionById { # Rewritten? YES, Added Function Descriptions?
 		[parameter(Mandatory=$true)][String]$alertdefinitionid
 		)
 	$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions/' + $alertdefinitionid		
-	#$restheaders = @{}
-	#$restheaders.Add('Accept','application/'+$responseformat)
-	#$resturl = 'https://' + $resthost + '/suite-api/api/alertdefinitions/' + $alertdefinitionid
+
 	if ($token -ne $null) {
 		$getAlertDefinitionByIdresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 	}
 	else {
-		$getAlertDefinitionByIdresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+		$getAlertDefinitionByIdresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
 	}	
 	return $getAlertDefinitionByIdresponse
-	
-	
-	
-	
-	#Try {
-	#	$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -credential $credentials -ErrorAction Stop
-	#}
-	#Catch {
-		#$Error[0].Exception.InnerException
-		#return $_.Exception.Message	
-	#}
-	#return $reponse
+
 }	
-function getAlertDefinitions { # Rewritten? YES, Added Function Descriptions? No
+function getAlertDefinitions {
+	<#
+		.SYNOPSIS
+			Returns a collection of Alert Definitions matching the search criteria specified.
+		.DESCRIPTION
+			Returns a collection of Alert Definitions matching the search criteria specified.
+		.EXAMPLE
+			getAlertDefinitions -resthost $resthost -token $token
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER alertdefinitionid
+			The identifier(s) of the Alert Definitions to search for.
+			Do not specify adapterKind or resourceKind if searching by the identifier
+		.PARAMETER adapterkind
+			Adapter Kind key of the Alert Definitions to search for
+		.PARAMETER resourcekind
+			Resource Kind key of the Alert Definitions to search for
+		.NOTES
+			Added in version 0.2
+	#>
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
@@ -183,88 +388,159 @@ function getAlertDefinitions { # Rewritten? YES, Added Function Descriptions? No
 		[parameter(Mandatory=$false)][String]$adapterkind,
 		[parameter(Mandatory=$false)][String]$resourcekind
 		)
-	if (($alertdefinitionid -ne "") -and (($adapterkind -ne "") -or ($resourcekind -ne ""))) {
-		write-host "alertdefinition" $alertdefintion
-		write-host "WARNING - When specifying an alert definition ID, an adapterkind or resourcekind are not necessary"
-		return
-	}
-	else {
-		if ($alertdefinitionid -ne "") {
-			$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions/?id=' + $alertdefinitionid
+	Process {
+		if (($alertdefinitionid -ne "") -and (($adapterkind -ne "") -or ($resourcekind -ne ""))) {
+			write-host "alertdefinition" $alertdefintion
+			write-host "WARNING - When specifying an alert definition ID, an adapterkind or resourcekind are not necessary"
+			return
 		}
-		elseif ($adapterkind -ne "") {
-			if ($resourcekind -ne "") {
-				$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions/?adapterKind=' + $adapterkind + '&resourceKind=' + $resourcekind 
+		else {
+			if ($alertdefinitionid -ne "") {
+				$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions/?id=' + $alertdefinitionid
+			}
+			elseif ($adapterkind -ne "") {
+				if ($resourcekind -ne "") {
+					$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions/?adapterKind=' + $adapterkind + '&resourceKind=' + $resourcekind 
+				}
+				else {
+					$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions/?adapterKind=' + $adapterkind
+				}
+			}
+			elseif ($resourcekind -ne "") {
+				$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions/?resourceKind=' + $resourcekind 
 			}
 			else {
-				$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions/?adapterKind=' + $adapterkind
+				$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions'
 			}
+			if ($token -ne $null) {
+				$getAlertDefinitionsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+			}
+			else {
+				$getAlertDefinitionsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+			}	
+			return $getAlertDefinitionsresponse
 		}
-		elseif ($resourcekind -ne "") {
-			$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions/?resourceKind=' + $resourcekind 
-		}
-		else {
-			$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions'
-		}
-		if ($token -ne $null) {
-			$getAlertDefinitionsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
-		}
-		else {
-			$getAlertDefinitionsresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
-		}	
-		return $getAlertDefinitionsresponse
 	}
 }
 
-
-
-# /api/alertplugins
-
-
+# /api/alertplugins -----------------------------------------------------------------------------------------------------------
 	
-# /api/alerts	
+# /api/alerts -----------------------------------------------------------------------------------------------------------------
 
-function getAlert { # Rewritten? YES, Added Function Descriptions? No
+function getAlert {
+	<#
+		.SYNOPSIS
+			Look up an Alert by its identifier.
+		.DESCRIPTION
+			Look up an Alert by its identifier.
+		.EXAMPLE
+			getAlerts -token $validtoken -resthost 'fqdn of vROps instance' -accept json -alertid 3014d718-18e4-42d5-b264-66f6b4ff4d8e
+		.EXAMPLE
+			getAlerts -credentials $validpscredentials -resthost 'fqdn of vROps instance' -accept xml -alertid 3014d718-18e4-42d5-b264-66f6b4ff4d8e
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER alertid
+			The vROps ID of the alert to query.
+		.NOTES
+			Added in version 0.2
+	#>
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][String]$token,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$true)]$alertid
+		[parameter(Mandatory=$true)][String]$alertid
 	)
-	$url = 'https://' + $resthost + '/suite-api/api/alerts/' + $alertid
-	if ($token -ne $null) {
-		$getAlertresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/alerts/' + $alertid
+		if ($token -ne $null) {
+			$getAlertresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getAlertresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getAlertresponse
 	}
-	else {
-		$getAlertresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
-	}	
-	return $getAlertresponse
 }
-function getAlerts { # Need to add ID and resourceID parameters and logic,........... Rewritten? YES, Added Function Descriptions? No
+function getAlerts {
+	<#
+		.SYNOPSIS
+			Look up Alerts by their identifiers or using the identifiers of the Resources they are associated with.
+		.DESCRIPTION
+			Look up Alerts by their identifiers or using the identifiers of the Resources they are associated with.
+		.EXAMPLE
+			getAlerts -token $validtoken -resthost 'fqdn of vROps instance' -accept json
+		.EXAMPLE
+			getAlerts -credentials $validpscredentials -resthost 'fqdn of vROps instance' -accept xml
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.NOTES
+			Added in version 0.2
+	#>
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)]$token,
-		# ID
-		# resourceID
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
 	)
-
-$url = 'https://' + $resthost + '/suite-api/api/alerts'
-	if ($token -ne $null) {
-		$getAlertsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/alerts'
+		if ($token -ne $null) {
+			$getAlertsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getAlertsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getAlertsresponse
 	}
-	else {
-		$getAlertsresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
-	}	
-	return $getAlertsresponse
 }
 
+# /api/auth -------------------------------------------------------------------------------------------------------------------
 
-# /api/auth
-
-function acquireToken { # Rewritten? Needs tidying up, Added Function Descriptions? No
+function acquireToken {
+	<#
+		.SYNOPSIS
+			Acquire a token to perform REST API calls.
+		.DESCRIPTION
+			Performing this request would yield a response object that includes token and its validity.
+		.EXAMPLE
+			acquireToken -resthost 'fqdn of vROps instance' -accept json -username 'admin' -password 'somepassword' -authSource 'local'
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER username
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER authSource
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER password
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER contenttype
+			Analogous to the header parameter 'Content-Type' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.NOTES
+			Added in version 0.2
+	#>
 	Param	(
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
@@ -272,51 +548,96 @@ function acquireToken { # Rewritten? Needs tidying up, Added Function Descriptio
 		[parameter(Mandatory=$false)][string]$username,
 		[parameter(Mandatory=$false)][string]$authSource,
 		[parameter(Mandatory=$false)][string]$password
-	)		
-	$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$accept)
-	$restheaders.Add('Content-Type','application/'+$contenttype)
-	$resturl = 'https://' + $resthost + '/suite-api/api/auth/token/acquire'
-	$body = @{
-			'username' = $username
-			'authSource' = $authSource
-			'password' = $password
-			'others' = @()
-			'otherAttributes' = @{}
-			} | convertto-json
-	Try {
-		$reponse = Invoke-RestMethod -Method 'POST' -Uri $resturl -Headers $restheaders -body $body -ErrorAction Stop
+	)
+	Process {
+		$restheaders = @{}
+		$restheaders.Add('Accept','application/'+$accept)
+		$restheaders.Add('Content-Type','application/'+$contenttype)
+		$url = 'https://' + $resthost + '/suite-api/api/auth/token/acquire'
+		if ($contenttype -eq 'json') {
+			$body = @{
+				'username' = $username
+				'authSource' = $authSource
+				'password' = $password
+				'others' = @()
+				'otherAttributes' = @{}
+				} | convertto-json
+		}
+		Try {
+			$reponse = Invoke-RestMethod -Method 'POST' -Uri $url -Headers $restheaders -body $body -ErrorAction Stop
+		}
+		Catch {
+			$Error[0].Exception.InnerException
+			return $_.Exception.Message	
+		}
+		return $reponse.token
 	}
-	Catch {
-		$Error[0].Exception.InnerException
-		return $_.Exception.Message	
-	}
-	return $reponse.token
 }
 
-# /api/collectorgroups
+# /api/collectorgroups --------------------------------------------------------------------------------------------------------
 
+# /api/collectors -------------------------------------------------------------------------------------------------------------
 
-# /api/collectors
-
-function getAdaptersOnCollector { # Rewritten? Yes, Added Function Descriptions? No
+function getAdaptersOnCollector {
+	<#
+		.SYNOPSIS
+			Gets all the Adapters registered (bound) to a specific Collector.
+		.DESCRIPTION
+			Gets all the Adapters registered (bound) to a specific Collector.
+		.EXAMPLE
+			getAdaptersOnCollector -resthost $resthost -token $token -collectorid $collectorsid
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER collectorid
+			ID of the collector to query
+		.NOTES
+			Added in version 0.1
+	#>
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$true)]$id
+		[parameter(Mandatory=$true)]$collectorid
 	)
-	$url = 'https://' + $resthost + '/suite-api/api/collectors/' + $id + '/adapters'
+	$url = 'https://' + $resthost + '/suite-api/api/collectors/' + $collectorid + '/adapters'
 	if ($token -ne $null) {
 		$getAdaptersOnCollectorresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 	}
 	else {
-		$getAdaptersOnCollectorresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+		$getAdaptersOnCollectorresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
 	}	
 	return $getAdaptersOnCollectorresponse
 }
-function getCollectors { # need to add in host as a parameter................... Rewritten? Yes, Added Function Descriptions? No
+function getCollectors {
+	<#
+		.SYNOPSIS
+			Gets all the Collectors registered with the vRealize Operations Manager system.
+		.DESCRIPTION
+			Gets all the Collectors registered with the vRealize Operations Manager system.
+		.EXAMPLE
+			getCollectors -resthost $resthost -token $token
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.NOTES
+			Added in version 0.1
+	#>
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
@@ -324,105 +645,84 @@ function getCollectors { # need to add in host as a parameter...................
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
 		# need to add in host as a parameter
 	)
-	$url = 'https://' + $resthost + '/suite-api/api/collectors'
-	if ($token -ne $null) {
-		$getCollectorsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/collectors'
+		if ($token -ne $null) {
+			$getCollectorsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getCollectorsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getCollectorsresponse
 	}
-	else {
-		$getCollectorsresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
-	}	
-	return $getCollectorsresponse
 }
 
-# /api/credentialkinds
+# /api/credentialkinds --------------------------------------------------------------------------------------------------------
 
-function getCredentialKinds { # Rewritten? Yes, Added Function Descriptions? No
-Param	(
+function getCredentialKinds {
+	<#
+		.SYNOPSIS
+			Get all Credential Kinds defined in the system. Gets all the Credential Kinds defined in the system. 
+		.DESCRIPTION
+			Get all Credential Kinds defined in the system. Gets all the Credential Kinds defined in the system.
+		.EXAMPLE
+			getCredentialKinds -resthost $resthost -token $token
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.NOTES
+			Added in version 0.3
+	#>
+	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
 	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/credentialkinds'
 		
-	$url = 'https://' + $resthost + '/suite-api/api/credentialkinds'
-	
-	if ($token -ne $null) {
-		$getCredentialKindsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		if ($token -ne $null) {
+			$getCredentialKindsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getCredentialKindsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getCredentialKindsresponse
 	}
-	else {
-		$getCredentialKindsresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
-	}	
-	return $getCredentialKindsresponse
 }
-function createResourceUsingAdapterKind { # Rewritten? NO, Added Function Descriptions? No
+
+# /api/credentials ------------------------------------------------------------------------------------------------------------
+
+function getCredentials {
 	<#
-	.SYNOPSIS
-		Creates a new Resource in the system associated with an existing adapter instance..
-	.DESCRIPTION
-		The API will create the missing Adapter Kind and Resource Kind contained within the ResourceKey of the Resource if they do not exist. The API will return an error if the adapter instance specified does not exist.
-		Additional implementation notes:
-
-		When creating a Resource, if the Resource Identifiers that are unique and required are not specified, the API would return an error with HTTP status code of 500 and an error message indicating the set of missing Resource Identifiers.
-		When creating a Resource, if the Resource Identifiers that are unique but not required are not specified, the Resource is created where the uniquely identifying Resource Identifiers that were not specified will have their value as an empty string. 
-	.EXAMPLE
-		CreateResourceUsingAdapterKind -credentials [some PS credentials] -resthost 'myvropshost.local' -adapterKindKey 'VMWARE'
-	.EXAMPLE
-		CreateResourceUsingAdapterKind -credentials [some PS credentials] -resthost 'myvropshost.local' -adapterKindKey 'VMWARE' -responseformat 'json' -restcontettype 'json' -body [some body content xml/json]
-	.PARAMETER credentials
-		A set of PS credentials that are passed to the rest host for authentication during execution
-	.PARAMETER resthost
-		Fully qualified domain name of the vROps node/cluster that you are running the REST call against
-	.PARAMETER responseformat
-		Equivalent to the accept component of the header. The accepted values are xml or json (default)
-	.PARAMETER body
-		The body content that will be passed to the vROps node/cluster. Format can be xml or json but the format needs to match the restcontentparameter value
-	.PARAMETER restcontenttype
-		The formate of the body content. Accepted values are xml or json (default)
-	.PARAMETER adapterKindKey
-		The key value of the adapter kind that the new resource is being created against. Defaults to VMWARE. MAY NEED TO DELETE THIS
-	#> 
+		.SYNOPSIS
+			Get all Credential Instances in the system. Gets all the Credential Instances in the system. Optionally filter by adapter kind keys or credential instance identifiers.
+		.DESCRIPTION
+			Get all Credential Instances in the system. Gets all the Credential Instances in the system. Optionally filter by adapter kind keys or credential instance identifiers.
+		.EXAMPLE
+			getCredentials -resthost $resthost -token $token -accept json
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.NOTES
+			Added in version 0.3
+	#>
 	Param	(
-		[parameter(Mandatory=$true)]$credentials,
-		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json',
-		[parameter(Mandatory=$true)]$body,
-		[parameter(Mandatory=$true)][ValidateSet('xml','json')]$restcontenttype = 'json',
-		[parameter(Mandatory=$true)]$adapterID
-		)		
-
-	$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$responseformat)
-	$contenttype = 'application/' + $restcontenttype
-	$resturl = 'https://' + $resthost + '/suite-api/api/resources/adapters/' + $adapterID
-	Try {
-		$reponse = Invoke-RestMethod -Method 'POST' -Uri $resturl -Headers $restheaders -credential $credentials -body $body -contenttype $contenttype -ErrorAction Stop
-	}
-	Catch {
-		return $_.Exception.Message	
-	}
-	return $reponse
-}
-function enumerateAdapterInstances {# Rewritten? Yes, Added Function Descriptions? No
-	Param	(
-		[parameter(Mandatory=$false)]$credentials,
-		[parameter(Mandatory=$false)]$token,
-		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'	
-		)
-	$url = 'https://' + $resthost + '/suite-api/api/adapters'
-	if ($token -ne $null) {
-		$enumerateAdapterInstancesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
-	}
-	else {
-		$enumerateAdapterInstancesresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
-	}	
-	return $enumerateAdapterInstancesresponse	
-}
-
-# /api/credentials
-
-function getCredentials { # Need to do ID and AdapterKind filters....... Rewritten? Yes, Added Function Descriptions? No
-Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)]$token,
@@ -435,394 +735,760 @@ Param	(
 		$getCredentialsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 	}
 	else {
-		$getCredentialsresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
+		$getCredentialsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
 	}	
 	return $getCredentialsresponse
 }
 
-# /api/deployment
+# /api/deployment -------------------------------------------------------------------------------------------------------------
 
-function getLicenceKeysForProduct { # Rewritten? Yes, Added Function Descriptions? No
-Param	(
+function getLicenceKeysForProduct {
+	<#
+		.SYNOPSIS
+			Gets all the License Details associated with a vRealize Operations Manager instance.
+		.DESCRIPTION
+			Gets all the License Details associated with a vRealize Operations Manager instance.
+		.EXAMPLE
+			getLicenceKeysForProduct -resthost $resthost -token cac9cdc1-c2b3-487c-a51f-4ccb45e2b246::5e0ab7fa-f401-497a-acce-e2429791fe98
+		.EXAMPLE
+			getLicenceKeysForProduct -resthost $resthost -credentials $credentials
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.NOTES
+			Added in version 0.3
+	#>
+	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
 	)
-	$url = 'https://' + $resthost + '/suite-api/api/deployment/licenses'
-	if ($token -ne $null) {
-		$getLicenceKeysForProductresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/deployment/licenses'
+		if ($token -ne $null) {
+			$getLicenceKeysForProductresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getLicenceKeysForProductresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getLicenceKeysForProductresponse
 	}
-	else {
-		$getLicenceKeysForProductresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
-	}	
-	return $getLicenceKeysForProductresponse
-
-
-
-
-
 }
 
-# /api/events
+function getNodeStatus {
+	<#
+		.SYNOPSIS
+			get the status of the node
+		.DESCRIPTION
+			If the status is ONLINE if all the services are running and responsive. else status is OFFLINE 
+		.EXAMPLE
+			getNodeStatus -resthost $resthost -credentials $vropscreds
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.NOTES
+			Added in version 0.3.5
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/deployment/node/status'
+		if ($token -ne $null) {
+			$getNodeStatusresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getNodeStatusresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getNodeStatusresponse
+	}
+}
 
-# /api/maintenanceschedules
+# /api/events -----------------------------------------------------------------------------------------------------------------
 
-# /api/notifications
+# /api/maintenanceschedules ---------------------------------------------------------------------------------------------------
 
-# /api/recommendations
+# /api/notifications ----------------------------------------------------------------------------------------------------------
 
-# /api/reportdefinitions
+# /api/recommendations --------------------------------------------------------------------------------------------------------
 
-# /api/reports
+# /api/reportdefinitions ------------------------------------------------------------------------------------------------------
 
-function createReport { # Rewritten? Yes, Added Function Descriptions? No
-Param	(
+# /api/reports ----------------------------------------------------------------------------------------------------------------
+
+function createReport {
+	<#
+		.SYNOPSIS
+			Generate (create) a Report using the specified Report Definition and for the specified Resource.
+		.DESCRIPTION
+			Generate (create) a Report using the specified Report Definition and for the specified Resource.
+		.EXAMPLE
+			createReport -token $token -resthost vrops-01a.cloudkindergarten.local -reportid 4eaae8d7-c57a-4e0a-a2bc-e103d63d1aaf -objectid f44eae09-b99a-4e85-9b8f-457739789ba1
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the subject that the report will be run against.
+		.PARAMETER reportid
+			The vROps ID of the report to be generated.
+		.NOTES
+			Added in version 0.3
+	#>
+	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$true)][String]$id,
+		[parameter(Mandatory=$true)][String]$objectid,
 		[parameter(Mandatory=$true)][String]$reportid
 	)
-		
-	$url = 'https://' + $resthost + '/suite-api/api/reports'
-	
-	
-	$body = @{
-		'id'=$null
-		'resourceId'=$id
-		'reportDefinitionId'=$reportid
-		'traversalSpec'=@{
-			'name'='Custom Groups'
-			'rootAdapterKindKey'='?'
-			'rootResourceKindKey'='?'
-			'adapterInstanceAssociation'=$false
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/reports'
+		$body = @{
+			'id'=$null
+			'resourceId'=$objectid
+			'reportDefinitionId'=$reportid
+			'traversalSpec'=@{
+				'name'='Custom Groups'
+				'rootAdapterKindKey'='?'
+				'rootResourceKindKey'='?'
+				'adapterInstanceAssociation'=$false
+				'others'=@()
+				'otherAttributes'=@{}
+				}
+			'subject'=@()
 			'others'=@()
 			'otherAttributes'=@{}
-			}
-		'subject'=@()
-		'others'=@()
-		'otherAttributes'=@{}
-	} | convertto-json -depth 5
-	
-	
-
-	if ($token -ne $null) {
-		$getCredentialKindsresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body
+		} | convertto-json -depth 5
+		if ($token -ne $null) {
+			$getCredentialKindsresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body
+		}
+		else {
+			$getCredentialKindsresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -body $body
+		}	
+		return $getCredentialKindsresponse
 	}
-	else {
-		$getCredentialKindsresponse = invokeRestMethod -method 'POST' -url $url -credentials $credentials -body $body
-	}	
-	return $getCredentialKindsresponse
 }
 
+# /api/resources -------------------------------------------------------------------------------------------------------------- 
 
-
-
-
-
-
-# /api/resources
-
-function addProperties { # Rewritten? Yes, Added Function Descriptions? No
+function addProperties {
 	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		TBC
-	.PARAMETER resthost
-		TBC
-	.PARAMETER responseformat
-		TBC
-	#> 
-		Param	(
+		.SYNOPSIS
+			Adds Properties to a Resource. 
+		.DESCRIPTION
+			Adds Properties to a Resource. 
+		.EXAMPLE
+			addProperties -resthost $resthost -token $token -objectid 8014d795-18e4-42d5-a264-89f6b47f4d8e -body $body
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER contenttype
+			Analogous to the header parameter 'Content-Type' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the object for which the properties are being added.
+		.PARAMETER body
+			Body content that describes the property/properties being added to the object
+		.NOTES
+			Added in version 0.1
+	#>
+	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$true)][ValidateSet('xml','json')]$restcontenttype = 'json',
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
 		[parameter(Mandatory=$true)][String]$body,
-		[parameter(Mandatory=$true)][String]$id
-		)
-	$url = 'https://' + $resthost + '/suite-api/api/resources/' + $id + '/properties/'
-	if ($token -ne $null) {
-		$addPropertiesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body -contenttype $restcontenttype
+		[parameter(Mandatory=$true)][String]$objectid
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/properties/'
+		if ($token -ne $null) {
+			$addPropertiesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body -contenttype $contenttype
+		}
+		else {
+			$addPropertiesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -body $body -contenttype $contenttype
+		}
+		return $addPropertiesresponse
 	}
-	else {
-		$addPropertiesresponse = invokeRestMethod -method 'POST' -url $url -credentials $credentials -body $body -contenttype $restcontenttype
-	}	
-	return $addPropertiesresponse
 }
-function addRelationship { # Rewritten? No, Added Function Descriptions? No
+function addRelationship {
 	<#
-	.SYNOPSIS
-		Add relationships of given type to the resource with specified resourceId. 
-	.DESCRIPTION
-		Add relationships of given type to the resource with specified resourceId:
-		- If all of the Resources that are part of the relatedIds list are invalid/non-existent then the API returns a 404 error. 
-		- If at least a few of the Resources that are part of relatedIds list are valid resources then the operation is performed. 
-		- If there are few Resources that are part of relatedIds list that will result in a cyclical relationship, then those resources will be skipped.
-		NOTE: Adding relationship is not synchronous. As a result, the add operation may not happen immediately. It is recommended to query the relationships of the specific Resource back to ensure that the operation was indeed successful. 	
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		A set of PS credentials that are passed to the rest host for authentication during execution
-	.PARAMETER resthost
-		Fully qualified domain name of the vROps node/cluster that you are running the REST call against
-	.PARAMETER responseformat
-		Equivalent to the accept component of the header. The accepted values are xml or json (default)
-	.PAREMETER object
-		TBC
-	.PARAMETER relationship
-		TBC
-	#> 
-	Param	(
-		[parameter(Mandatory=$true)]$credentials,
-		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json',
-		[parameter(Mandatory=$true)]$body,
-		[parameter(Mandatory=$true)][ValidateSet('xml','json')]$restcontenttype = 'json',
-		[parameter(Mandatory=$true)][String]$object,
-		[parameter(Mandatory=$true)][ValidateSet('children','parent')][String]$relationship
-		)
-		$restheaders = @{}
-		$restheaders.Add('Accept','application/'+$responseformat)
-		$resturl = 'https://' + $resthost + '/suite-api/api/resources/' + $object + '/relationships/' + $relationship
-		$contenttype = 'application/' + $restcontenttype
-		Try {
-			$reponse = Invoke-WebRequest -Method 'POST' -Uri $resturl -Headers $restheaders -credential $credentials -body $body -contenttype $contenttype -ErrorAction Stop
-		}
-		Catch {
-			return $_.Exception.Message	
-		}
-		return $reponse
-}
-function addStats { # Rewritten? No, Added Function Descriptions? No
-	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		TBC
-	.PARAMETER resthost
-		TBC
-	.PARAMETER responseformat
-		TBC
+		.SYNOPSIS
+			Add relationships of given type to the resource with specified resourceId. 
+		.DESCRIPTION
+			Add relationships of given type to the resource with specified resourceId.
+			NOTE: Adding relationship is not synchronous. As a result, the add operation may not happen immediately.
+			It is recommended to query the relationships of the specific Resource back to ensure that the operation was indeed successful. 
+		.EXAMPLE
+			addRelationship -resthost $resthost -token $token -objectid 6434d795-1bc4-42d5-a264-89f6b47f4d8e -relationship children -body $body
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the object for which the relationship is being configured
+		.PARAMETER body
+			Body content that describes the relationship being created
+		.PARAMETER relationship
+			The relationship that is being defined, valid values are 'parent' or 'children'
+		.PARAMETER contenttype
+			Analogous to the header parameter 'Content-Type' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.NOTES
+			Added in version 0.1
 	#>
 	Param	(
-		[parameter(Mandatory=$true)]$credentials,
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json',
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
 		[parameter(Mandatory=$true)]$body,
-		[parameter(Mandatory=$true)][ValidateSet('xml','json')]$restcontenttype = 'json',
+		[parameter(Mandatory=$true)][String]$objectid,
+		[parameter(Mandatory=$true)][ValidateSet('children','parent')][String]$relationship
+		)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/relationships/' + $relationship
+		if ($token -ne $null) {
+			$addRelationshipresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body -contenttype $contenttype
+		}
+		else {
+			$addRelationshipresponse = invokeRestMethod -method 'POST' -url $url -credentials $credentials -body $body -contenttype $contenttype
+		}	
+		return $addRelationshipresponse
+	}
+}
+function addStats {
+	<#
+		.SYNOPSIS
+			Adds Stats to a Resource.
+		.DESCRIPTION
+			It is recommended (though not required) to use this API when the resource was created using the API POST /api/resources/{id}/adapters/{adapterInstanceId}.
+			Otherwise an additional adapter instance might be created. 
+		.EXAMPLE
+			addStats -resthost $resthost -token $token -objectid 8014d795-18e4-42d5-a264-89f6b47f4d8e -body $body
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the object to add stats to
+		.PARAMETER body
+			The body payload that contains the details of the metrics and values to add
+		.PARAMETER contenttype
+			Analogous to the header parameter 'Content-Type' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.NOTES
+			Added in version 0.1
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
+		[parameter(Mandatory=$true)]$body,
 		[parameter(Mandatory=$true)][String]$objectid
 		)
-		$restheaders = @{}
-		$restheaders.Add('Accept','application/'+$responseformat)
-		$resturl = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/stats'
-		$contenttype = 'application/' + $restcontenttype
-		Try {
-			$reponse = Invoke-WebRequest -Method 'POST' -Uri $resturl -Headers $restheaders -credential $credentials -body $body -contenttype $contenttype -ErrorAction Stop
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/stats'
+		if ($token -ne $null) {
+			$addStatsresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body -contenttype $contenttype
 		}
-		Catch {
-			return $_.Exception.Message	
-		}
-		return $reponse
-
+		else {
+			$addStatsresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -body $body -contenttype $contenttype
+		}	
+		return $addStatsresponse
+	}
 }
-
-
-function getLatestStatsofResources { # Rewritten? Yes, Added Function Descriptions? No	
+function createResourceUsingAdapterKind {
+	<#
+		.SYNOPSIS
+			Creates a new Resource in the system associated with an existing adapter instance.
+		.DESCRIPTION
+			The API will create the missing Adapter Kind and Resource Kind contained within the ResourceKey of the Resource if they do not exist.
+			The API will return an error if the adapter instance specified does not exist.
+		.EXAMPLE
+			createResourceUsingAdapterKind -resthost $resthost -token $token -body $body -adapterID $adapterid
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER body
+			Body content that describes the new resource being created
+		.PARAMETER adapterID
+			The ID of the adapter instance on which the new resource should be created
+		.PARAMETER contenttype
+			Analogous to the header parameter 'Content-Type' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.	
+		.NOTES
+			Added in version 0.2
+	#>
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$true)][string]$object,	
 		[parameter(Mandatory=$false)]$token,
-		[parameter(Mandatory=$true)]$statkey
-		)	
-	$url = 'https://' + $resthost + '/suite-api/api/resources/stats/latest?resourceId=' + $object + '&statKey=' + $statkey
-	# write-host $url
-	if ($token -ne $null) {
-		$getLatestStatsofResourcesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
-	}
-	else {
-		$getLatestStatsofResourcesresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
-	}
-
-	return $getLatestStatsofResourcesresponse	
-	
-	
-
-
-
-
-
-}
-
-
-
-function setRelationship { # Rewritten? No, Added Function Descriptions? No
-	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		A set of PS credentials that are passed to the rest host for authentication during execution
-	.PARAMETER resthost
-		Fully qualified domain name of the vROps node/cluster that you are running the REST call against
-	.PARAMETER responseformat
-		Equivalent to the accept component of the header. The accepted values are xml or json (default)
-	.PAREMETER object
-		TBC
-	.PARAMETER relationship
-		TBC
-	#> 
-	Param	(
-		[parameter(Mandatory=$true)]$credentials,
-		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json',
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
 		[parameter(Mandatory=$true)]$body,
-		[parameter(Mandatory=$true)][ValidateSet('xml','json')]$restcontenttype = 'json',
-		[parameter(Mandatory=$true)][String]$object,
-		[parameter(Mandatory=$true)][ValidateSet('children','parent')][String]$relationship
+		[parameter(Mandatory=$true)]$adapterID
 		)
-		$restheaders = @{}
-		$restheaders.Add('Accept','application/'+$responseformat)
-		$resturl = 'https://' + $resthost + '/suite-api/api/resources/' + $object + '/relationships/' + $relationship
-		$contenttype = 'application/' + $restcontenttype
-		Try {
-			$reponse = Invoke-WebRequest -Method 'PUT' -Uri $resturl -Headers $restheaders -credential $credentials -body $body -contenttype $contenttype -ErrorAction Stop
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/adapters/' + $adapterID
+		if ($token -ne $null) {
+			$createResourceUsingAdapterKindresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -contenttype $contenttype -body $body
 		}
-		Catch {
-			return $_.Exception.Message	
-		}
-		return $reponse
-}
-function getRelationship { # Rewritten? Yes, Added Function Descriptions? No	
-	Param	(
-		[parameter(Mandatory=$false)]$credentials,
-		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$true)][string]$object,	
-		[parameter(Mandatory=$true)][ValidateSet('children','parents')][String]$relationship,
-		[parameter(Mandatory=$false)]$token
-		)	
-	$url = 'https://' + $resthost + '/suite-api/api/resources/' + $object + '/relationships/' + $relationship
-	if ($token -ne $null) {
-		$getRelationshipresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		else {
+			$createResourceUsingAdapterKindresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -contenttype $contenttype -body $body
+		}	
+		return $createResourceUsingAdapterKindresponse
 	}
-	else {
-		$getRelationshipresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
-	}	
-	return $getRelationshipresponse	
 }
-function getResourceProperties { # Rewritten? Yes, Added Function Descriptions? No
-Param	(
+function deleteResource {
+	<#
+		.SYNOPSIS
+			Deletes a Resource with the given identifier. 
+		.DESCRIPTION
+			Deletes a Resource with the given identifier.
+			NOTE: Deletion of a Resource is not synchronous. As a result, the delete operation may not happen immediately.
+			It is recommended to query back the system with the resource identifier and ensure that the system returns a 404 error. 
+		.EXAMPLE
+			deleteResource -resthost $resthost -token $token -objectid 80133295-18e4-42d5-a264-8af6b47f4d8e
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the resource to delete
+		.NOTES
+			Added in version 0.1
+	#>
+	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$false)][string]$id	
-		)
-	$url = 'https://' + $resthost + '/suite-api/api/resources/' + $id + '/properties'
-	if ($token -ne $null) {
-		$getResourcePropertiesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
+		[parameter(Mandatory=$true)][String]$objectid
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid
+		if ($token -ne $null) {
+			$deleteResourceresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -token $token -contenttype $contenttype
+		}
+		else {
+			$deleteResourceresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -credentials $credentials -contenttype $contenttype
+		}	
+		return $deleteResourceresponse
 	}
-	else {
-		$getResourcePropertiesresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
-	}	
-	return $getResourcePropertiesresponse
 }
-function deleteRelationship { # Rewritten? No, Added Function Descriptions? No
+function getLatestStatsofResources {
 	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		TBC
-	.PARAMETER resthost
-		TBC
-	.PARAMETER responseformat
-		TBC
+		.SYNOPSIS
+			Gets Latest stats of resources using the query spec that is specified.
+		.DESCRIPTION
+			Gets Latest stats of resources using the query spec that is specified.
+		.EXAMPLE
+			getLatestStatsofResources -resthost $resthost -token $token -objectid 80133295-18e4-42d5-a264-8af6b47f4d8e -statkey 'PowervROPsTesting|TestStat'
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the object for which the latest stats should be returned
+		.PARAMETER statkey
+			If supplied the response will be limited to the vROps statkey supplied
+		.NOTES
+			Added in version 0.2
 	#>
 	Param	(
-		[parameter(Mandatory=$true)]$credentials,
+		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json',
-		[parameter(Mandatory=$true)][String]$parent,
-		[parameter(Mandatory=$true)][String]$child,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][string]$objectid,	
+		[parameter(Mandatory=$true)]$statkey
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/stats/latest?resourceId=' + $objectid + '&statKey=' + $statkey
+		if ($token -ne $null) {
+			$getLatestStatsofResourcesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getLatestStatsofResourcesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}
+		return $getLatestStatsofResourcesresponse
+	}
+}
+function setRelationship {
+	<#
+		.SYNOPSIS
+			Set (Replace) Resources as RelationshipType of a specific Resource.
+		.DESCRIPTION
+			This API exposes replace semantics. Therefore, all the existing relationships of the specified
+			relationshipType will be removed and replaced with the resources specified as part of the request body. 
+		.EXAMPLE
+			setRelationship -resthost $resthost -token $token -objectid 80133295-18e4-42d5-a264-8af6b47f4d8e -relationship children -body $body
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER contenttype
+			Analogous to the header parameter 'Content-Type' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER body
+			Body payload used to set the relationship
+		.PARAMETER objectid
+			The vROps ID of the object to set the relationship on
+		.PARAMETER relationship
+			The relationship type to set between the two objects. Valid values are parent or children.
+		.NOTES
+			Added in version 0.1
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)]$body,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
+		[parameter(Mandatory=$true)][String]$objectid,
 		[parameter(Mandatory=$true)][ValidateSet('children','parent')][String]$relationship
-		)
-	$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$responseformat)
-	$resturl = 'https://' + $resthost + '/suite-api/api/resources/' + $parent + '/relationships/' + $relationship + '/' + $child
-	Try {
-		$reponse = Invoke-WebRequest -Method 'DELETE' -Uri $resturl -Headers $restheaders -credential $credentials -ErrorAction Stop
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/relationships/' + $relationship
+		if ($token -ne $null) {
+			$setRelationshipresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -token $token -body $body -contenttype $contenttype
+		}
+		else {
+			$setRelationshipresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -credentials $credentials -body $body -contenttype $contenttype
+		}	
+		return $setRelationshipresponse	
 	}
-	Catch {
-		return $_.Exception.Message	
-	}
-	return $reponse
 }
-function startMonitoringResource { # Rewritten? No, Added Function Descriptions? No
+function getRelationship {	
 	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		TBC
-	.PARAMETER resthost
-		TBC
-	.PARAMETER responseformat
-		TBC
+		.SYNOPSIS
+			Gets the related resources of a particular Relationship Type for a Resource.
+		.DESCRIPTION
+			Gets the related resources of a particular Relationship Type for a Resource.
+		.EXAMPLE
+			getRelationship -resthost $resthost -token $token -objectid 80133295-18e4-42d5-a264-8af6b47f4d8e -relationship children
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			vROps ID of the object to query
+		.PARAMETER relationship
+			Relationship type to query, valid values are 'parent' and 'children'.
+		.NOTES
+			Added in version 0.1
 	#>
 	Param	(
-		[parameter(Mandatory=$true)]$credentials,
+		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$responseformat = 'json',
-		[parameter(Mandatory=$true)][String]$object
-		)
-	$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$responseformat)
-	$resturl = 'https://' + $resthost + '/suite-api/api/resources/' + $object + '/monitoringstate/start'
-	$response = Invoke-WebRequest -Method 'PUT' -Uri $resturl -credential $credentials -contenttype $restcontenttype -headers $restheaders
-	return $response
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][string]$objectid,	
+		[parameter(Mandatory=$true)][ValidateSet('children','parents')][String]$relationship
+	)	
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/relationships/' + $relationship
+		if ($token -ne $null) {
+			$getRelationshipresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getRelationshipresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getRelationshipresponse
+	}
 }
-function getResources { # NEED TO ADD ALL QUERY TYPES # Rewritten? Yes, Added Function Descriptions? No
+function getResourceProperties {
+	<#
+		.SYNOPSIS
+			Get all the properties for the specified Resource.
+		.DESCRIPTION
+			Get all the properties for the specified Resource.
+		.EXAMPLE
+			getResourceProperties -resthost $resthost -token $token -objectid 80133295-18e4-42d5-a264-8af6b47f4d8e
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			vROps ID of the object to query
+		.NOTES
+			Added in version 0.1
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][string]$objectid	
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/properties'
+		if ($token -ne $null) {
+			$getResourcePropertiesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getResourcePropertiesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getResourcePropertiesresponse
+	}
+}
+function deleteRelationship {
+	<#
+		.SYNOPSIS
+			Deletes (removes) a Resource as RelationshipType of a specific Resource.
+		.DESCRIPTION
+			Deletes (removes) a Resource as RelationshipType of a specific Resource.
+			If either of the Resources that are part of the path parameters are invalid/non-existent then the API returns a 404 error.
+			NOTE: Removing a relationship is not synchronous. As a result, the delete operation may not happen immediately.
+			It is recommended to query the relationships of the specific Resource back to ensure that the operation was indeed successful. 
+		.EXAMPLE
+			deleteRelationship -resthost $resthost -token $token -objectid 8014d795-18e4-42d5-a264-89f6b47f4d8e -relatedid 6434d795-1bc4-42d5-a264-89f6b47f4d8e -relationship children
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the object to delete the relationship from
+		.PARAMETER relatedid
+			The vROps ID of the related object
+		.PARAMETER relationship
+			The vROps relationship between the primary object (objectid) and secondary object (relatedid)
+		.NOTES
+			Added in version 0.1
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][String]$objectid,
+		[parameter(Mandatory=$true)][String]$relatedid,
+		[parameter(Mandatory=$true)][ValidateSet('children','parent')][String]$relationship
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/relationships/' + $relationship + '/' + $relatedid	
+		if ($token -ne $null) {
+			$deleteRelationshipresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -token $token
+		}
+		else {
+			$deleteRelationshipresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -credentials $credentials
+		}	
+		return $deleteRelationshipresponse
+	}
+}
+function startMonitoringResource {
+	<#
+		.SYNOPSIS
+			Inform one or more or all Adapters to start monitoring this Resource.
+		.DESCRIPTION
+			Inform one or more or all Adapters to start monitoring this Resource.
+		.EXAMPLE
+			startMonitoringResource -resthost $resthost -token $token -objectid 8014d795-18e4-42d5-a264-89f6b47f4d8e
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the object to start monitoring
+		.NOTES
+			Added in version 0.2
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][String]$objectid
+		)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/monitoringstate/start'
+		if ($token -ne $null) {
+			$startMonitoringResourceresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -token $token
+		}
+		else {
+			$startMonitoringResourceresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -credentials $credentials
+		}	
+		return $startMonitoringResourceresponse
+	}
+}
+function stopMonitoringResource {
+	<#
+		.SYNOPSIS
+			Inform one or more or all Adapters to stop monitoring this Resource.
+		.DESCRIPTION
+			Inform one or more or all Adapters to stop monitoring this Resource.
+		.EXAMPLE
+			stopMonitoringResource -resthost $resthost -token $token -objectid 8014d795-18e4-42d5-a264-89f6b47f4d8e
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the object to stop monitoring
+		.NOTES
+			Added in version 0.2
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][String]$objectid
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/monitoringstate/stop'	
+		if ($token -ne $null) {
+			$stopMonitoringResourceresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -token $token
+		}
+		else {
+			$stopMonitoringResourceresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -credentials $credentials
+		}	
+		return $stopMonitoringResourceresponse
+	}
+}
+function getResources {
+	<#
+		.SYNOPSIS
+			Gets a listing of resources based on the query spec specified.
+		.DESCRIPTION
+			Currently the function only permits querying for resources via the following filters:
+				Name
+				ResourceKind
+				ObjectId
+		.EXAMPLE
+			getResources -resthost $resthost -token $token -name NameofObject
+		.EXAMPLE
+			getResources -resthost $resthost -token $token -resourceKind 'ClusterComputeResource'
+		.EXAMPLE
+			getResources -resthost $resthost -token $token -objectid 8014d795-18e4-42d5-a264-89f6b47f4d8e
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER name
+			The name of the vROps object to query.
+		.PARAMETER resourceKind
+			The resourceKind of the objects to query. This will return multiple objects. Examples of resourceKind are:
+				ClusterComputeResource
+				VirtualMachine
+		.PARAMETER objectid
+			The vROps ID of the object to query.
+		.NOTES
+			Added in version 0.1
+	#>
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$false)]$token,
@@ -830,57 +1496,248 @@ function getResources { # NEED TO ADD ALL QUERY TYPES # Rewritten? Yes, Added Fu
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$false)][String]$name,
 		[parameter(Mandatory=$false)][String]$resourceKind,
-		[parameter(Mandatory=$false)][string]$id	
-		)	
-	$url = 'https://' + $resthost + '/suite-api/api/resources?'
-	if ($name -ne $null) {
-		$url += 'name=' + $name + '&'
+		[parameter(Mandatory=$false)][string]$objectid	
+		)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources?'
+		if ($name -ne "") {
+			$url += 'name=' + $name + '&'
+		}
+		if ($resourceKind -ne "") {
+			$url += 'resourceKind=' + $resourceKind + '&'
+		}
+		if ($objectid -ne "") {
+			$url += 'resourceId=' + $objectid + '&'
+		}
+		$url = $url.Substring(0,$url.Length-1)
+		if ($token -ne $null) {
+			$getResourcesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getResourcesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}
+		return $getResourcesresponse
 	}
-	if ($resourceKind -ne $null) {
-		$url += '&resourceKind=' + $resourceKind
-	}
-	if ($token -ne $null) {
-		$getResourcesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
-	}
-	else {
-		$getResourcesresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials
-	}	
-	return $getResourcesresponse
-
-
-}
-
-# /api/solutions
-
-
-
-# /api/supermetrics
-
-
-function getSuperMetric { # Rewritten? No, Added Function Descriptions? No
-Param	(
+}		
+function getResource {
+	<#
+		.SYNOPSIS
+			Gets the Resource for the specified identifier.
+		.DESCRIPTION
+			Gets the Resource for the specified identifier.
+		.EXAMPLE
+			getResource -resthost $resthost -token $token -objectid 3014d793-18e4-42d5-a264-66f6b47f4d8e
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the object to query.
+		.NOTES
+			Added in version 0.1
+	#>
+	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$false)][string]$id	
+		[parameter(Mandatory=$true)][string]$objectid	
 		)
-	if (($credentials -eq $null) -and ($token -eq $null)) {
-		return "No credentials or bearer token supplied"
-	}
-	else {
-		$restheaders = setRestHeaders -accept $accept -token $token
-		$resturl = 'https://' + $resthost + '/suite-api/api/supermetrics/' + $id
-		Try {
-			$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -body $body -ErrorAction Stop
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid
+		if ($token -ne $null) {
+			$getResourceresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 		}
-		Catch {
-			return $_.Exception.Message	
-		}
-		return $reponse
+		else {
+			$getResourceresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getResourceresponse
 	}
 }
-function getSuperMetrics { # Rewritten? No, Added Function Descriptions? No
+function markResourceAsBeingMaintained {
+	<#
+		.SYNOPSIS
+			TBC
+		.DESCRIPTION
+			TBC
+		.EXAMPLE
+			TBC
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the object to query.
+		.PARAMETER duration
+			TBC
+		.PARAMTER end
+			TBC
+		.NOTES
+			Added in version 0.3.5
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][string]$objectid,
+		[parameter(Mandatory=$false)][string]$duration,
+		[parameter(Mandatory=$false)][string]$end
+		)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/maintained'
+		
+		if ($end -ne $null) {
+			$url += ('?end=' + $end)
+		}
+		elseif ($duration -ne $null) {
+			$url += ('?duration=' + $duration)
+		}
+		
+		if ($token -ne $null) {
+			$markResourceAsBeingMaintainedresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -token $token
+		}
+		else {
+			$markResourceAsBeingMaintainedresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -credentials $credentials
+		}	
+		return $markResourceAsBeingMaintainedresponse
+	}
+}
+
+function unmarkResourceAsBeingMaintained {
+	<#
+		.SYNOPSIS
+			TBC
+		.DESCRIPTION
+			TBC
+		.EXAMPLE
+			TBC
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the object to query.
+		.PARAMETER duration
+			TBC
+		.PARAMTER end
+			TBC
+		.NOTES
+			Added in version 0.3.5
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][string]$objectid
+		)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/maintained'
+		
+		
+		if ($token -ne $null) {
+			$unmarkResourceAsBeingMaintainedresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -token $token
+		}
+		else {
+			$unmarkResourceAsBeingMaintainedresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -credentials $credentials
+		}	
+		return $unmarkResourceAsBeingMaintainedresponse
+	}
+}
+# /api/solutions --------------------------------------------------------------------------------------------------------------
+
+# /api/supermetrics -----------------------------------------------------------------------------------------------------------
+
+function getSuperMetric {
+	<#
+		.SYNOPSIS
+			Get a SuperMetric with the given id.
+		.DESCRIPTION
+			Get a SuperMetric with the given id.
+		.EXAMPLE
+			getSuperMetric -resthost $resthost -token $token -supermetricid 3014d718-18e4-42d5-b264-66f6b4ff4d8e
+		.EXAMPLE
+			getSuperMetric -resthost $resthost -credentials $credentials -supermetricid 3014d718-18e4-42d5-b264-66f6b4ff4d8e
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER supermetricid
+			ID of the supermetric, can be obtained either manually via the UI or via the getSuperMetrics
+			cmdlet
+		.NOTES
+			Added in version 0.1
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][string]$supermetricid	
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/supermetrics/' + $supermetricid
+		if ($token -ne $null) {
+			$getSuperMetricresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getSuperMetricresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getSuperMetricresponse	
+	}
+}
+function getSuperMetrics {
+	<#
+		.SYNOPSIS
+			Gets a collection of SuperMetrics based on search parameters.
+		.DESCRIPTION
+			Gets a collection of SuperMetrics based on search parameters. Possible methods for filltering are:
+			name
+			supermetricid (not yet implemented)
+		.EXAMPLE
+			getSuperMetrics -resthost $resthost -token $token
+		.EXAMPLE
+			getSuperMetrics -resthost $resthost -credentials $credentials -name MyFirstSupermetric
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER name
+			The name of the supermetric to query
+		.NOTES
+			Added in version 0.1
+	#>
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$false)]$token,
@@ -888,233 +1745,257 @@ function getSuperMetrics { # Rewritten? No, Added Function Descriptions? No
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$false)][string]$name	
 		)
-	if (($credentials -eq $null) -and ($token -eq $null)) {
-		return "No credentials or bearer token supplied"
-	}
-	else {
-		$restheaders = setRestHeaders -accept $accept -token $token
+	Process {
 		if (($name -eq $null) -or ($name -eq "")) {
-			$resturl = 'https://' + $resthost + '/suite-api/api/supermetrics'
+			$url = 'https://' + $resthost + '/suite-api/api/supermetrics'
 		}
 		else {
-			$resturl = 'https://' + $resthost + '/suite-api/api/supermetrics?name=' + $name
+			$url = 'https://' + $resthost + '/suite-api/api/supermetrics?name=' + $name
+		}	
+			
+		if ($token -ne $null) {
+			$getSuperMetricsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 		}
-		Try {
-			$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -body $body -ErrorAction Stop
-		}
-		Catch {
-			return $_.Exception.Message	
-		}
-		return $reponse
+		else {
+			$getSuperMetricsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getSuperMetricsresponse		
 	}
 }
 
+# /api/symptomdefinitions -----------------------------------------------------------------------------------------------------
 
+# /api/symptoms ---------------------------------------------------------------------------------------------------------------
 
+# /api/tasks ------------------------------------------------------------------------------------------------------------------
 
+# /api/versions ---------------------------------------------------------------------------------------------------------------
 
-# /api/symptomdefinitions
+# /internal/resources ---------------------------------------------------------------------------------------------------------
 
-# /api/symptoms
-
-# /api/tasks
-
-# /api/versions
-
-
-# /internal/resources
-
-function getCustomGroup { # Rewritten? Yes, Added Function Descriptions? No
+function getCustomGroup {
+	<#
+		.SYNOPSIS
+			Retrieve a custom group definition using its identifier.
+		.DESCRIPTION
+			Retrieve a custom group definition using its identifier.
+		.EXAMPLE
+			getCustomGroup -resthost $resthost -token $token -objectid $customgroupid
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the custom group to query
+		.NOTES
+			Added in version 0.1
+	#>
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$false)][string]$id	
-		)
-	$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $id	
-	if ($token -ne $null) {
-		$getcustomgroupresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token -useinternalapi $true
+		[parameter(Mandatory=$true)][string]$objectid		
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $objectid	
+		if ($token -ne $null) {
+			$getcustomgroupresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token -useinternalapi $true
+		}
+		else {
+			$getcustomgroupresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+		}	
+		return $getcustomgroupresponse	
 	}
-	else {
-		$getcustomgroupresponse = invokeRestMethod -method 'GET' -url $url -credentials $credentials -useinternalapi $true
-	}	
-	return $getcustomgroupresponse	
 }
-function getCustomGroups { # Rewritten? No, Added Function Descriptions? No
+function getCustomGroups {
 	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		TBC
-	.PARAMETER resthost
-		TBC
-	.PARAMETER responseformat
-		TBC
+		.SYNOPSIS
+			Query for custom groups based on groupId and whether they are dynamic or static.
+		.DESCRIPTION
+			Query for custom groups based on groupId and whether they are dynamic or static.
+		.EXAMPLE
+			getCustomGroups -resthost $resthost -token $token
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.NOTES
+			Added in version 0.1
 	#>
 	Param	(
-		[parameter(Mandatory=$true)]$credentials,
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
-		)
-	$resturl = 'https://' + $resthost + '/suite-api/internal/resources/groups'
-	$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$accept)
-	$restheaders.Add("X-vRealizeOps-API-use-unsupported","true")
-	Try {
-		$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -credential $credentials -ErrorAction Stop
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups'
+		if ($token -ne $null) {
+			$getCustomGroupsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token -useinternalapi $true
+		}
+		else {
+			$getCustomGroupsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+		}	
+		return $getCustomGroupsresponse
 	}
-	Catch {
-		$Error[0].Exception.InnerException
-		return $_.Exception.Message	
-	}
-	return $reponse	
 }
-function createCustomGroup { # Rewritten? No, Added Function Descriptions? No
+function createCustomGroup {
 	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		TBC
-	.PARAMETER resthost
-		TBC
-	.PARAMETER responseformat
-		TBC
-	#> 
-		Param	(
-		[parameter(Mandatory=$true)]$credentials,
+		.SYNOPSIS
+			Create a new custom group definition
+		.DESCRIPTION
+			The new group can be created with one of the following definitions:
+				Metric Key
+				Property Key
+				Relationship Condition
+				Resource Name
+		.EXAMPLE
+			createCustomGroup -resthost $resthost -token $token -body $body
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER body
+			Body content to be used when creating the custom group
+		.NOTES
+			Added in version 0.1
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$true)][ValidateSet('xml','json')]$restcontenttype = 'json',
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
 		[parameter(Mandatory=$true)][String]$body
-		)
-	$resturl = 'https://' + $resthost + '/suite-api/internal/resources/groups'
-	$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$accept)
-	$restheaders.Add("X-vRealizeOps-API-use-unsupported","true")
-	$contenttype = 'application/' + $restcontenttype
-
-	Try {
-		$reponse = Invoke-WebRequest -Method 'POST' -Uri $resturl -Headers $restheaders -credential $credentials -body $body -contenttype $contenttype -ErrorAction Stop
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups'
+		if ($token -ne $null) {
+			$createCustomGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -useinternalapi $true -contenttype $contenttype -body $body
+		}
+		else {
+			$createCustomGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -useinternalapi $true -contenttype $contenttype -body $body
+		}	
+		return $createCustomGroupresponse
 	}
-	Catch {
-		$Error[0].Exception.InnerException
-		return $_.Exception.Message	
-	}
-	return $reponse	
-
 }
-function getMembersOfGroup { # Rewritten? No, Added Function Descriptions? No
-
-
-
-
+function getMembersOfGroup {
 	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		TBC
-	.PARAMETER resthost
-		TBC
-	.PARAMETER responseformat
-		TBC
+		.SYNOPSIS
+			Get the list of (computed/static) members of the group. 
+		.DESCRIPTION
+			Get the list of (computed/static) members of the group. 
+		.EXAMPLE
+			getMembersOfGroup -resthost $resthost -credentials $credentials -objectid $customgroupID
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the group to get the members of
+		.NOTES
+			Added in version 0.1
 	#>
-Param	(
-		[parameter(Mandatory=$true)]$credentials,
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$true)][String]$objectid
-		)
-	$resturl = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $objectid + '/members'
-	$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$accept)
-	$restheaders.Add("X-vRealizeOps-API-use-unsupported","true")
-	Try {
-		$reponse = Invoke-RestMethod -Method 'GET' -Uri $resturl -Headers $restheaders -credential $credentials -ErrorAction Stop
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $objectid + '/members'
+		if ($token -ne $null) {
+			$getMembersOfGroupresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token -useinternalapi $true
+		}
+		else {
+			$getMembersOfGroupresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+		}	
+		return $getMembersOfGroupresponse
 	}
-	Catch {
-		$Error[0].Exception.InnerException
-		return $_.Exception.Message	
-	}
-	return $reponse
-
-
-
-
-
-
 }
-function deleteCustomGroup { # Rewritten? No, Added Function Descriptions? No
+function deleteCustomGroup {
 	<#
-	.SYNOPSIS
-		TBC
-	.DESCRIPTION
-		TBC
-		NEED TO ADD IN ALL POSSIBLE ACCEPTED PARAMETERS
-	.EXAMPLE
-		TBC
-	.EXAMPLE
-		TBC
-	.PARAMETER credentials
-		TBC
-	.PARAMETER resthost
-		TBC
-	.PARAMETER responseformat
-		TBC
+		.SYNOPSIS
+			Delete a custom group. 
+		.DESCRIPTION
+			Delete a custom group. 
+		.EXAMPLE
+			getMembersOfGroup -resthost $resthost -token $token -objectid $customgroupID
+		.EXAMPLE
+			getMembersOfGroup -resthost $resthost -credentials $credentials -objectid $customgroupID
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the custom group to delete
+		.NOTES
+			Added in version 0.1
 	#>
-Param	(
-		[parameter(Mandatory=$true)]$credentials,
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$true)][String]$objectid
-		)
-	$resturl = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $objectid
-	$restheaders = @{}
-	$restheaders.Add('Accept','application/'+$accept)
-	$restheaders.Add("X-vRealizeOps-API-use-unsupported","true")
-	Try {
-		$reponse = Invoke-RestMethod -Method 'DELETE' -Uri $resturl -Headers $restheaders -credential $credentials -ErrorAction Stop
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $objectid
+
+		if ($token -ne $null) {
+			$deleteCustomGroupresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -token $token -useinternalapi $true
+		}
+		else {
+			$deleteCustomGroupresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+		}	
+		return $deleteCustomGroupresponse
 	}
-	Catch {
-		$Error[0].Exception.InnerException
-		return $_.Exception.Message	
-	}
-	return $reponse
 }
 
-
-
-export-modulemember -function 'updateAlertDefinition'
-export-modulemember -function 'getAlertDefinitionById'
 export-modulemember -function 'get*'
 export-modulemember -function 'Create*'
 export-modulemember -function 'add*'
 export-modulemember -function 'set*'
 export-modulemember -function 'delete*'
 export-modulemember -function 'start*'
+export-modulemember -function 'stop*'
 export-modulemember -function 'acquire*'
 export-modulemember -function 'enumerate*'
+export-modulemember -function 'update*'
+export-modulemember -function 'mark*'
+export-modulemember -function 'unmark*'
 
 
 
