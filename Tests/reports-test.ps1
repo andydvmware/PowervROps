@@ -18,15 +18,14 @@ import-module 'C:\Users\taguser\Documents\GitHub\PowervROps\powervrops.psm1'
 $testname = 'createReport'
 $teststate = 'FAIL'
 
-
+$reportdefinitionid = '4eaae8d7-c57a-4e0a-a2bc-e103d63d1aaf'
 
 if ($token -ne "") {
-	$createReport = createReport -token $token -resthost vrops-01a.cloudkindergarten.local -reportid 4eaae8d7-c57a-4e0a-a2bc-e103d63d1aaf -objectid f44eae09-b99a-4e85-9b8f-457739789ba1
+	$createReport = createReport -token $token -resthost $resthost -reportdefinitionid $reportdefinitionid -objectid f44eae09-b99a-4e85-9b8f-457739789ba1
 }
 elseif ($credentials -ne "") {
-	$createReport = createReport -credentials $credentials -resthost vrops-01a.cloudkindergarten.local -reportid 4eaae8d7-c57a-4e0a-a2bc-e103d63d1aaf -objectid f44eae09-b99a-4e85-9b8f-457739789ba1
+	$createReport = createReport -credentials $credentials -resthost $resthost -reportdefinitionid $reportdefinitionid -objectid f44eae09-b99a-4e85-9b8f-457739789ba1
 }
-
 
 
 
@@ -41,4 +40,85 @@ write-host ($testname + ": " + $teststate) -foregroundcolor green
 else {
 write-host ($testname + ": " + $teststate) -foregroundcolor red
 }
+
+
+
+
+
+
+
+$testname = 'getReport'
+$teststate = 'FAIL'
+
+
+
+
+
+	$t = 0
+	Do {
+	
+	if ($token -ne "") {
+
+	$getReport = getReport -token $token -resthost $resthost -reportid $createReport.id
+}
+elseif ($credentials -ne "") {
+	$getReport = getReport -credentials $credentials -resthost $resthost -reportid $createReport.id
+}
+	
+	
+	
+	start-sleep 1
+	$t++
+	
+	}
+	Until (($t -eq 120) -or ($getReport.status -eq 'COMPLETED'))
+	
+	
+	
+	
+	
+	
+	if ($getReport.status -eq 'COMPLETED') {
+$teststate = 'SUCCESS'
+write-host ($testname + ": " + $teststate) -foregroundcolor green 
+
+}
+else {
+write-host ($testname + ": " + $teststate) -foregroundcolor red
+}
+
+
+
+
+$testname = 'downloadReport'
+$teststate = 'FAIL'
+
+$testfile = 'c:\users\taguser\downloads\testreport.csv'
+
+if ((get-item $testfile -erroraction silentlycontinue) -ne $null) {
+
+
+remove-item $testfile -confirm:$false
+}
+
+if ($token -ne "") {
+
+	$downloadreport = downloadReport -token $token -resthost $resthost -reportid $getreport.id -format 'csv' -outputfile $testfile
+}
+elseif ($credentials -ne "") {
+	$downloadreport = downloadReport -credentials $credentials -resthost $resthost -reportid $getreport.id -format 'csv' -outputfile $testfile
+}
+
+start-sleep 5
+
+if ((get-item $testfile -erroraction silentlycontinue) -ne $null) {
+$teststate = 'SUCCESS'
+write-host ($testname + ": " + $teststate) -foregroundcolor green 
+
+}
+else {
+write-host ($testname + ": " + $teststate) -foregroundcolor red
+}
+
+
 

@@ -1,9 +1,9 @@
 # |----------------------------------------------------------------------------------------------------------------------------|
 # | Module Name: PowervROps.psm1                                                           									   |
 # | Author: Andy Davies (andyd@vmware.com)                                                                        			   |
-# | Date: 9th August 2017                                                                                    				   |
+# | Date: 18th August 2017                                                                                    				   |
 # | Description: PowerShell module that enables the use of the vROPs API via PowerShell cmdlets								   |
-# | Version: 0.3.6                                                                                                 		   |
+# | Version: 0.3.7                                                                                                		   |
 # |----------------------------------------------------------------------------------------------------------------------------|
 
 function getTimeSinceEpoch {
@@ -832,6 +832,72 @@ function getNodeStatus {
 
 # /api/reportdefinitions ------------------------------------------------------------------------------------------------------
 
+function getReportDefinitions { # No test currently
+	<#
+		.SYNOPSIS
+			TBC
+		.DESCRIPTION
+			TBC
+		.EXAMPLE
+			TBC
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER name
+			TBC
+		.PARAMETER owner
+			TBC
+		.PARAMTER duration
+			TBC
+		.NOTES
+			Added in version 0.3.7
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][String]$name,
+		[parameter(Mandatory=$false)][String]$owner,
+		[parameter(Mandatory=$false)][String]$subject
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/reportdefinitions'
+		if ($name -ne "") {
+			$url += '?name=' + $name
+			if ($owner -ne ""){
+				$url += '&owner=' + $owner
+			}
+			if ($subject -ne "") {
+				$url += '&subject' + $subject
+			}
+		}
+		elseif ($owner -ne ""){
+			$url += '?owner=' + $owner
+			if ($subject -ne "") {
+				$url += '&subject' + $subject
+			}
+		}
+		elseif ($subject -ne "") {
+			$url += '?subject' + $subject
+		}
+		if ($token -ne $null) {
+			$getReportDefinitionsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getReportDefinitionsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getReportDefinitionsresponse
+	}
+}
+
 # /api/reports ----------------------------------------------------------------------------------------------------------------
 
 function createReport {
@@ -841,7 +907,7 @@ function createReport {
 		.DESCRIPTION
 			Generate (create) a Report using the specified Report Definition and for the specified Resource.
 		.EXAMPLE
-			createReport -token $token -resthost vrops-01a.cloudkindergarten.local -reportid 4eaae8d7-c57a-4e0a-a2bc-e103d63d1aaf -objectid f44eae09-b99a-4e85-9b8f-457739789ba1
+			createReport -token $token -resthost vrops-01a.cloudkindergarten.local -reportdefinitionid 4eaae8d7-c57a-4e0a-a2bc-e103d63d1aaf -objectid f44eae09-b99a-4e85-9b8f-457739789ba1
 		.PARAMETER credentials
 			A set of PS Credentials used to authenticate against the vROps endpoint.
 		.PARAMETER token
@@ -865,14 +931,14 @@ function createReport {
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$true)][String]$objectid,
-		[parameter(Mandatory=$true)][String]$reportid
+		[parameter(Mandatory=$true)][String]$reportdefinitionid
 	)
 	Process {
 		$url = 'https://' + $resthost + '/suite-api/api/reports'
 		$body = @{
 			'id'=$null
 			'resourceId'=$objectid
-			'reportDefinitionId'=$reportid
+			'reportDefinitionId'=$reportdefinitionid
 			'traversalSpec'=@{
 				'name'='Custom Groups'
 				'rootAdapterKindKey'='?'
@@ -892,6 +958,100 @@ function createReport {
 			$getCredentialKindsresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -body $body
 		}	
 		return $getCredentialKindsresponse
+	}
+}
+function downloadReport {
+	<#
+		.SYNOPSIS
+			Download the Report given its identifier.
+		.DESCRIPTION
+			Download the Report given its identifier. The supported formats for Reports are:
+				pdf
+				csv
+			If the format is not specified the downloaded report will be in PDF format.
+		.EXAMPLE
+			downloadReport -token $token -resthost $resthost -reportid $reportid -format 'csv' -outputfile 'c:\somedirectory\somefile.csv'
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER reportid
+			The vROps ID of the report to be generated.
+		.PARAMETER format
+			TBC
+		.PARAMETER outputfile
+			Location to download the report to
+		.NOTES
+			Added in version 0.3.7
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][ValidateSet('pdf','csv')][string]$format = 'pdf',
+		[parameter(Mandatory=$false)]$outputfile,
+		[parameter(Mandatory=$true)][String]$reportid
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/reports/' + $reportid + '/download?format=' + $format
+		if ($token -ne $null) {
+			$restheaders = @{}
+			$restheaders.add('Authorization',('vRealizeOpsToken ' + $token))
+			$downloadReportresponse = invoke-webrequest -uri $url -header $restheaders -outfile $outputfile -method 'GET'
+		}
+		else {
+			downloadReportresponse = invoke-webrequest -uri $url -credential $credentials -outfile $outputfile -method 'GET'
+
+		}	
+		return $downloadReportresponse
+	}
+}
+function getReport {
+	<#
+		.SYNOPSIS
+			Gets the detail of a Report given its identifier.
+		.DESCRIPTION
+			Gets the detail of a Report given its identifier.
+		.EXAMPLE
+			getReport -token $token -resthost $resthost -reportid $reportid
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER reportid
+			The vROps ID of the report to be generated.
+		.NOTES
+			Added in version 0.3.7
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][String]$reportid
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/reports/' + $reportid
+		if ($token -ne $null) {
+			$getReportresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getReportresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getReportresponse
 	}
 }
 
@@ -1453,7 +1613,7 @@ function stopMonitoringResource {
 		return $stopMonitoringResourceresponse
 	}
 }
-function getResources {
+function getResources { # Need additional tests for pagesize and pagenumber
 	<#
 		.SYNOPSIS
 			Gets a listing of resources based on the query spec specified.
@@ -1486,6 +1646,8 @@ function getResources {
 				VirtualMachine
 		.PARAMETER objectid
 			The vROps ID of the object to query.
+		.PARAMETER pagesize
+			The number of records to return as part of the query
 		.NOTES
 			Added in version 0.1
 	#>
@@ -1496,6 +1658,8 @@ function getResources {
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$false)][String]$name,
 		[parameter(Mandatory=$false)][String]$resourceKind,
+		[parameter(Mandatory=$false)][Int]$pagesize = 1000,
+		[parameter(Mandatory=$false)][Int]$pagetoview = 0,
 		[parameter(Mandatory=$false)][string]$objectid	
 		)
 	Process {
@@ -1510,6 +1674,7 @@ function getResources {
 			$url += 'resourceId=' + $objectid + '&'
 		}
 		$url = $url.Substring(0,$url.Length-1)
+		$url += '&pageSize=' + $pagesize + '&page=' + $pagetoview
 		if ($token -ne $null) {
 			$getResourcesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 		}
@@ -2008,6 +2173,7 @@ export-modulemember -function 'Create*'
 export-modulemember -function 'add*'
 export-modulemember -function 'set*'
 export-modulemember -function 'delete*'
+export-modulemember -function 'download*'
 export-modulemember -function 'start*'
 export-modulemember -function 'stop*'
 export-modulemember -function 'acquire*'

@@ -111,10 +111,10 @@ $testname = 'markResourceAsBeingMaintained'
 $teststate = 'FAIL'
 
 if ($token -ne "") {
-	markResourceAsBeingMaintained -resthost $resthost -token $token -objectid $getResourcesresourcekind.resourceList[0].identifier
+	$putresourceintomaintenancemode = markResourceAsBeingMaintained -resthost $resthost -token $token -objectid $getResourcesresourcekind.resourceList[0].identifier
 }
 elseif ($credentials -ne "") {
-	markResourceAsBeingMaintained -resthost $resthost -credentials $credentials -objectid $getResourcesresourcekind.resourceList[0].identifier
+	$putresourceintomaintenancemode = markResourceAsBeingMaintained -resthost $resthost -credentials $credentials -objectid $getResourcesresourcekind.resourceList[0].identifier
 }
 
 start-sleep 5
@@ -125,20 +125,18 @@ if ($token -ne "") {
 elseif ($credentials -ne "") {
 	$getResourcesafterentermaintenance = getResource -resthost $resthost -credentials $credentials -objectid $getResourcesresourcekind.resourceList[0].identifier
 }
-
-
-
-
-
+$inmaintenancemode = $false
 foreach ($resourcestate in $getResourcesafterentermaintenance.resourceStatusStates) {
-
-$resourcestate
+	if ($resourcestate.resourcestate -eq 'MAINTAINED_MANUAL') {
+		$inmaintenancemode = $true
+	}
 }
 
 
 
 
-if ($getResourcesafterentermaintenance.resourceStatusStates.resourceStatus -contains 'MAINTAINED_MANUAL') {
+if ($inmaintenancemode -eq $true) {
+$teststate = 'SUCCESS'
 write-host ($testname + ": " + $teststate) -foregroundcolor green 
 }
 else {
@@ -178,6 +176,8 @@ if ($getResourcesresourcekind.resourceList[0].resourceStatusStates.resourceState
 write-host ($testname + ": " + $teststate) -foregroundcolor red
 }
 
+start-sleep 5
+
 	$testname = 'startMonitoringResource'
 	$teststate = 'FAIL'
 	if ($getResourcesidtemp.resourceList.resourceStatusStates.resourceState -eq 'STOPPED') {
@@ -206,10 +206,10 @@ write-host ($testname + ": " + $teststate) -foregroundcolor red
 }
 }
 else {
-write-host ($testname + ": " + $teststate) -foregroundcolor red
+write-host ($testname + ": " + $teststate + " - The resource was not in the started state when beginning the stop monitoring state") -foregroundcolor red
 $testname = 'startMonitoringResource'
 	$teststate = 'FAIL'
-	write-host ($testname + ": " + $teststate) -foregroundcolor red
+	write-host ($testname + ": " + $teststate + " - The resource was not in the started state when beginning the stop monitoring state") -foregroundcolor red
 }
 # ------------------------------------------------------------
 # Tests for getResourceProperties
@@ -242,11 +242,6 @@ $code = ""
 for ($i = 0;$i -lt 10;$i++) {
 	$code += $characterlist[(Get-Random -Minimum 1 -Maximum 26)]
 }
-
-
-
-
-
 if (($getResourceProperties.property.count) -gt 1) {
 	$body = @{
 		'property-content' = @( @{
