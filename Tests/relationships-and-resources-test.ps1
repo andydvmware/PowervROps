@@ -129,6 +129,7 @@ $inmaintenancemode = $false
 foreach ($resourcestate in $getResourcesafterentermaintenance.resourceStatusStates) {
 	if ($resourcestate.resourcestate -eq 'MAINTAINED_MANUAL') {
 		$inmaintenancemode = $true
+		Break
 	}
 }
 
@@ -136,10 +137,51 @@ foreach ($resourcestate in $getResourcesafterentermaintenance.resourceStatusStat
 
 
 if ($inmaintenancemode -eq $true) {
-$teststate = 'SUCCESS'
-write-host ($testname + ": " + $teststate) -foregroundcolor green 
+	$teststate = 'SUCCESS'
+	write-host ($testname + ": " + $teststate) -foregroundcolor green 
+	$testname = 'unmarkResourceAsBeingMaintained'
+	$teststate = 'FAIL'
+	if ($token -ne "") {
+		$takeresourceoutofmaintenancemode = unmarkResourceAsBeingMaintained -resthost $resthost -token $token -objectid $getResourcesresourcekind.resourceList[0].identifier
+	}
+	elseif ($credentials -ne "") {
+		$takeresourceoutofmaintenancemode = unmarkResourceAsBeingMaintained -resthost $resthost -credentials $credentials -objectid $getResourcesresourcekind.resourceList[0].identifier
+	}
+	start-sleep 5
+	if ($token -ne "") {
+		$response = getResource -resthost $resthost -token $token -objectid $getResourcesresourcekind.resourceList[0].identifier
+	}
+	elseif ($credentials -ne "") {
+		$response = getResource -resthost $resthost -credentials $credentials -objectid $getResourcesresourcekind.resourceList[0].identifier
+	}
+	
+	#$response
+	#write-host $response.resourceStatusStates
+
+	$outofmaintenancemode = $false
+	foreach ($resourcestate in $response.resourceStatusStates) {
+		if ($resourcestate.resourcestate -eq 'STARTED') {
+			$outofmaintenancemode = $true
+		}
+	}
+	
+	if ($outofmaintenancemode -eq $true) {
+		$teststate = 'SUCCESS'
+	write-host ($testname + ": " + $teststate) -foregroundcolor green 
+	}
+	else {
+		write-host ($testname + ": " + $teststate) -foregroundcolor red
+	}
+
+
+
+
+
 }
 else {
+write-host ($testname + ": " + $teststate) -foregroundcolor red
+$testname = 'unmarkResourceAsBeingMaintained'
+$teststate = 'FAIL'
 write-host ($testname + ": " + $teststate) -foregroundcolor red
 }
 

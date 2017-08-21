@@ -1007,7 +1007,7 @@ function downloadReport {
 			$downloadReportresponse = invoke-webrequest -uri $url -header $restheaders -outfile $outputfile -method 'GET'
 		}
 		else {
-			downloadReportresponse = invoke-webrequest -uri $url -credential $credentials -outfile $outputfile -method 'GET'
+			$downloadReportresponse = invoke-webrequest -uri $url -credential $credentials -outfile $outputfile -method 'GET'
 
 		}	
 		return $downloadReportresponse
@@ -1725,12 +1725,15 @@ function getResource {
 		return $getResourceresponse
 	}
 }
-function markResourceAsBeingMaintained { # no test, and documentation incomplete
+function markResourceAsBeingMaintained { # only single test for manual mode and documentation incomplete. Need tests for duration and end
 	<#
 		.SYNOPSIS
-			TBC
+			Put the specific Resource in Maintenance.
 		.DESCRIPTION
-			TBC
+			The Resource can end up in two maintenance states - MAINTAINED OR MAINTAINED_MANUAL - depending upon the inputs specified.
+				If duration/end time is specified, the resource will be placed in MAINTAINED state and after the duration/end time expires, the resource state is automatically set to the state it was in before entering the maintenance window.
+				If duration/end time is not specified, the resource will be placed in MAINTAINED_MANUAL state. Callers have to execute DELETE /suite-api/api/resources/{id}/maintained API to set the Resource back to whatever state it was in.
+				If both duration and end time are specified, end time takes preference over duration. 
 		.EXAMPLE
 			TBC
 		.PARAMETER credentials
@@ -1746,9 +1749,10 @@ function markResourceAsBeingMaintained { # no test, and documentation incomplete
 		.PARAMETER objectid
 			The vROps ID of the object to query.
 		.PARAMETER duration
-			TBC
+			The number of minutes that the object should be put into maintenance mode
 		.PARAMTER end
-			TBC
+			The date/time in Unix epoch format (number of milliseconds since 01/01/1970 00:00:00)
+			Use the getTimeSinceEpoch function and pass a date to the function to retrieve the required value
 		.NOTES
 			Added in version 0.3.5
 	#>
@@ -1758,7 +1762,7 @@ function markResourceAsBeingMaintained { # no test, and documentation incomplete
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$true)][string]$objectid,
-		[parameter(Mandatory=$false)][string]$duration,
+		[parameter(Mandatory=$false)][int]$duration,
 		[parameter(Mandatory=$false)][string]$end
 		)
 	Process {
@@ -1780,14 +1784,14 @@ function markResourceAsBeingMaintained { # no test, and documentation incomplete
 		return $markResourceAsBeingMaintainedresponse
 	}
 }
-function unmarkResourceAsBeingMaintained { # no test, and docuemntation incomplete
+function unmarkResourceAsBeingMaintained {
 	<#
 		.SYNOPSIS
-			TBC
+			Bring the Resource out of Maintenance manually.
 		.DESCRIPTION
-			TBC
+			Bring the Resource out of Maintenance manually.
 		.EXAMPLE
-			TBC
+			unmarkResourceAsBeingMaintained -resthost $resthost -token $token -objectid $resourceid
 		.PARAMETER credentials
 			A set of PS Credentials used to authenticate against the vROps endpoint.
 		.PARAMETER token
@@ -1800,10 +1804,6 @@ function unmarkResourceAsBeingMaintained { # no test, and docuemntation incomple
 			However, the module has only been tested against json.
 		.PARAMETER objectid
 			The vROps ID of the object to query.
-		.PARAMETER duration
-			TBC
-		.PARAMTER end
-			TBC
 		.NOTES
 			Added in version 0.3.5
 	#>
