@@ -3,7 +3,7 @@
 # | Author: Andy Davies (andyd@vmware.com)                                                                        			   |
 # | Date: 18th August 2017                                                                                    				   |
 # | Description: PowerShell module that enables the use of the vROPs API via PowerShell cmdlets								   |
-# | Version: 0.3.7                                                                                                		   |
+# | Version: 0.4.0                                                                                              		   |
 # |----------------------------------------------------------------------------------------------------------------------------|
 
 function getTimeSinceEpoch {
@@ -140,11 +140,13 @@ function invokeRestMethod {
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',	
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$contenttype = 'json',
 		[parameter(Mandatory=$false)][ValidateSet($true,$false)][string]$useinternalapi = $false,
+		[parameter(Mandatory=$false)][switch]$ignoressl,
 		[parameter(Mandatory=$false)][int]$timeoutsec = 30
 	)
 	Process {
 		if (($credentials -eq $null) -and ($token -eq $null)) {
-			return "No credentials or bearer token supplied"
+			Write-Host ("ERROR: ") -ForegroundColor red -nonewline; Write-Host 'No credentials or bearer token supplied' -ForegroundColor White;
+			return
 		}
 		elseif ($token -ne $null) {
 			if ($useinternalapi -eq $true) {
@@ -166,7 +168,10 @@ function invokeRestMethod {
 			if ($token -ne $null) {
 				Try {
 
+				
 					$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -body $body -timeoutsec $timeoutsec -ErrorAction Stop
+
+				
 					return $response
 				}
 				Catch {
@@ -176,7 +181,11 @@ function invokeRestMethod {
 			}
 			else {
 				Try {
+
+			
 					$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -body $body -credential $credentials -timeoutsec $timeoutsec -ErrorAction Stop
+
+				
 					return $response
 				}
 				Catch {
@@ -188,7 +197,11 @@ function invokeRestMethod {
 		else {
 			if ($token -ne $null) {
 				Try {
+
+		
 					$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -timeoutsec $timeoutsec -ErrorAction Stop
+
+			
 					return $response
 				}
 				Catch {
@@ -198,7 +211,11 @@ function invokeRestMethod {
 			}
 			else {
 				Try {
+
+			
 					$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -credential $credentials -timeoutsec $timeoutsec -ErrorAction Stop
+
+				
 					return $response
 				}
 				Catch {
@@ -209,6 +226,8 @@ function invokeRestMethod {
 	}
 }
 
+function connectvROpsServer { # TBC
+}
 #/api/actiondefinitions -------------------------------------------------------------------------------------------------------
 
 function getAllActions {
@@ -239,6 +258,7 @@ function getAllActions {
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][switch]$ignoressl,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
 	)
 	Process {
@@ -289,6 +309,7 @@ function enumerateAdapterInstances {
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][switch]$ignoressl,
 		[parameter(Mandatory=$false)]$adapterKindKey
 		)
 	Process {
@@ -338,6 +359,7 @@ function getAlertDefinitionById {
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][switch]$ignoressl,
 		[parameter(Mandatory=$true)][String]$alertdefinitionid
 		)
 	$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions/' + $alertdefinitionid		
@@ -386,6 +408,7 @@ function getAlertDefinitions {
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$false)][String]$alertdefinitionid,
 		[parameter(Mandatory=$false)][String]$adapterkind,
+		[parameter(Mandatory=$false)][switch]$ignoressl,
 		[parameter(Mandatory=$false)][String]$resourcekind
 		)
 	Process {
@@ -457,6 +480,7 @@ function getAlert {
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][String]$token,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][switch]$ignoressl,
 		[parameter(Mandatory=$true)][String]$alertid
 	)
 	Process {
@@ -497,6 +521,7 @@ function getAlerts {
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][switch]$ignoressl,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
 	)
 	Process {
@@ -564,13 +589,15 @@ function acquireToken {
 				} | convertto-json
 		}
 		Try {
-			$reponse = Invoke-RestMethod -Method 'POST' -Uri $url -Headers $restheaders -body $body -ErrorAction Stop
+			$response = Invoke-RestMethod -Method 'POST' -Uri $url -Headers $restheaders -body $body -ErrorAction Stop
+			return $response.token
 		}
 		Catch {
-			$Error[0].Exception.InnerException
-			return $_.Exception.Message	
-		}
-		return $reponse.token
+			Write-Host ("ERROR: ") -ForegroundColor red -nonewline; Write-Host 'Token not generated' -ForegroundColor White;
+			Write-Host $response
+			Write-Host $Error[0].Exception
+
+		}		
 	}
 }
 
@@ -1207,6 +1234,55 @@ function addStats {
 		return $addStatsresponse
 	}
 }
+function addStatsforResources {
+	<#
+		.SYNOPSIS
+			Adds Stats to a group of resources.
+		.DESCRIPTION
+			It is recommended (though not required) to use this API when the resource was created using the API POST /api/resources/{id}/adapters/{adapterInstanceId}.
+			Otherwise an additional adapter instance might be created. 
+		.EXAMPLE
+			addStatstoResources -resthost $resthost -token $token -body $body
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER body
+			The body payload that contains the details of the IDs, metrics and values to add
+		.PARAMETER contenttype
+			Analogous to the header parameter 'Content-Type' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.NOTES
+			Added in version 0.4
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
+		[parameter(Mandatory=$true)]$body
+		)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/stats'
+		if ($token -ne $null) {
+			$addStatsforResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body -contenttype $contenttype
+		}
+		else {
+			$addStatsforResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -body $body -contenttype $contenttype
+		}	
+		return $addStatsforResourcesresponse
+	}
+}
+
+
+
 function createResourceUsingAdapterKind {
 	<#
 		.SYNOPSIS
@@ -1247,6 +1323,7 @@ function createResourceUsingAdapterKind {
 		)
 	Process {
 		$url = 'https://' + $resthost + '/suite-api/api/resources/adapters/' + $adapterID
+
 		if ($token -ne $null) {
 			$createResourceUsingAdapterKindresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -contenttype $contenttype -body $body
 		}
@@ -1254,6 +1331,56 @@ function createResourceUsingAdapterKind {
 			$createResourceUsingAdapterKindresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -contenttype $contenttype -body $body
 		}	
 		return $createResourceUsingAdapterKindresponse
+	}
+}
+function deleteRelationship {
+	<#
+		.SYNOPSIS
+			Deletes (removes) a Resource as RelationshipType of a specific Resource.
+		.DESCRIPTION
+			Deletes (removes) a Resource as RelationshipType of a specific Resource.
+			If either of the Resources that are part of the path parameters are invalid/non-existent then the API returns a 404 error.
+			NOTE: Removing a relationship is not synchronous. As a result, the delete operation may not happen immediately.
+			It is recommended to query the relationships of the specific Resource back to ensure that the operation was indeed successful. 
+		.EXAMPLE
+			deleteRelationship -resthost $resthost -token $token -objectid 8014d795-18e4-42d5-a264-89f6b47f4d8e -relatedid 6434d795-1bc4-42d5-a264-89f6b47f4d8e -relationship children
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the object to delete the relationship from
+		.PARAMETER relatedid
+			The vROps ID of the related object
+		.PARAMETER relationship
+			The vROps relationship between the primary object (objectid) and secondary object (relatedid)
+		.NOTES
+			Added in version 0.1
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][String]$objectid,
+		[parameter(Mandatory=$true)][String]$relatedid,
+		[parameter(Mandatory=$true)][ValidateSet('children','parent')][String]$relationship
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/relationships/' + $relationship + '/' + $relatedid	
+		if ($token -ne $null) {
+			$deleteRelationshipresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -token $token
+		}
+		else {
+			$deleteRelationshipresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -credentials $credentials
+		}	
+		return $deleteRelationshipresponse
 	}
 }
 function deleteResource {
@@ -1344,6 +1471,312 @@ function getLatestStatsofResources {
 		return $getLatestStatsofResourcesresponse
 	}
 }
+function getRelationship {	
+	<#
+		.SYNOPSIS
+			Gets the related resources of a particular Relationship Type for a Resource.
+		.DESCRIPTION
+			Gets the related resources of a particular Relationship Type for a Resource.
+		.EXAMPLE
+			getRelationship -resthost $resthost -token $token -objectid 80133295-18e4-42d5-a264-8af6b47f4d8e -relationship children
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			vROps ID of the object to query
+		.PARAMETER relationship
+			Relationship type to query, valid values are 'parent' and 'children'.
+		.NOTES
+			Added in version 0.1
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][string]$objectid,	
+		[parameter(Mandatory=$true)][ValidateSet('children','parents')][String]$relationship
+	)	
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/relationships/' + $relationship
+		if ($token -ne $null) {
+			$getRelationshipresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getRelationshipresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getRelationshipresponse
+	}
+}
+function getResource {
+	<#
+		.SYNOPSIS
+			Gets the Resource for the specified identifier.
+		.DESCRIPTION
+			Gets the Resource for the specified identifier.
+		.EXAMPLE
+			getResource -resthost $resthost -token $token -objectid 3014d793-18e4-42d5-a264-66f6b47f4d8e
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the object to query.
+		.NOTES
+			Added in version 0.1
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][string]$objectid	
+		)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid
+		if ($token -ne $null) {
+			$getResourceresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getResourceresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getResourceresponse
+	}
+}
+function getResourceProperties {
+	<#
+		.SYNOPSIS
+			Get all the properties for the specified Resource.
+		.DESCRIPTION
+			Get all the properties for the specified Resource.
+		.EXAMPLE
+			getResourceProperties -resthost $resthost -token $token -objectid 80133295-18e4-42d5-a264-8af6b47f4d8e
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			vROps ID of the object to query
+		.NOTES
+			Added in version 0.1
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][string]$objectid	
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/properties'
+		if ($token -ne $null) {
+			$getResourcePropertiesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getResourcePropertiesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getResourcePropertiesresponse
+	}
+}
+function getResources { # Need additional tests for pagesize and pagenumber
+	<#
+		.SYNOPSIS
+			Gets a listing of resources based on the query spec specified.
+		.DESCRIPTION
+			Currently the function only permits querying for resources via the following filters:
+				Name
+				ResourceKind
+				ObjectId
+		.EXAMPLE
+			getResources -resthost $resthost -token $token -name NameofObject
+		.EXAMPLE
+			getResources -resthost $resthost -token $token -resourceKind 'ClusterComputeResource'
+		.EXAMPLE
+			getResources -resthost $resthost -token $token -objectid 8014d795-18e4-42d5-a264-89f6b47f4d8e
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER name
+			The name of the vROps object to query.
+		.PARAMETER resourceKind
+			The resourceKind of the objects to query. This will return multiple objects. Examples of resourceKind are:
+				ClusterComputeResource
+				VirtualMachine
+		.PARAMETER objectid
+			The vROps ID of the object to query.
+		.PARAMETER pagesize
+			The number of records to return as part of the query
+		.NOTES
+			Added in version 0.1
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][String]$name,
+		[parameter(Mandatory=$false)][String]$resourceKind,
+		[parameter(Mandatory=$false)][Int]$pagesize = 1000,
+		[parameter(Mandatory=$false)][Int]$pagetoview = 0,
+		[parameter(Mandatory=$false)][string]$objectid	
+		)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources?'
+		if ($name -ne "") {
+			$url += 'name=' + $name + '&'
+		}
+		if ($resourceKind -ne "") {
+			$url += 'resourceKind=' + $resourceKind + '&'
+		}
+		if ($objectid -ne "") {
+			$url += 'resourceId=' + $objectid + '&'
+		}
+		$url = $url.Substring(0,$url.Length-1)
+		$url += '&pageSize=' + $pagesize + '&page=' + $pagetoview
+		
+		if ($token -ne $null) {
+			$getResourcesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getResourcesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}
+		return $getResourcesresponse
+	}
+}
+function getStatsForResources { # No test, and no documentation
+	<#
+		.SYNOPSIS
+			Put the specific Resource in Maintenance.
+		.DESCRIPTION
+			The Resource can end up in two maintenance states - MAINTAINED OR MAINTAINED_MANUAL - depending upon the inputs specified.
+				If duration/end time is specified, the resource will be placed in MAINTAINED state and after the duration/end time expires, the resource state is automatically set to the state it was in before entering the maintenance window.
+				If duration/end time is not specified, the resource will be placed in MAINTAINED_MANUAL state. Callers have to execute DELETE /suite-api/api/resources/{id}/maintained API to set the Resource back to whatever state it was in.
+				If both duration and end time are specified, end time takes preference over duration. 
+		.EXAMPLE
+			TBC
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the object to query.
+		.PARAMETER duration
+			The number of minutes that the object should be put into maintenance mode
+		.PARAMTER end
+			The date/time in Unix epoch format (number of milliseconds since 01/01/1970 00:00:00)
+			Use the getTimeSinceEpoch function and pass a date to the function to retrieve the required value
+		.NOTES
+			Added in version 0.4.0
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$true)]$body,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/stats/query'
+		if ($token -ne $null) {
+			$getStatsForResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body
+		}
+		else {
+			$getStatsForResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -body $body
+		}	
+		return $getStatsForResourcesresponse
+	}
+}
+function markResourceAsBeingMaintained { # only single test for manual mode and documentation incomplete. Need tests for duration and end
+	<#
+		.SYNOPSIS
+			Put the specific Resource in Maintenance.
+		.DESCRIPTION
+			The Resource can end up in two maintenance states - MAINTAINED OR MAINTAINED_MANUAL - depending upon the inputs specified.
+				If duration/end time is specified, the resource will be placed in MAINTAINED state and after the duration/end time expires, the resource state is automatically set to the state it was in before entering the maintenance window.
+				If duration/end time is not specified, the resource will be placed in MAINTAINED_MANUAL state. Callers have to execute DELETE /suite-api/api/resources/{id}/maintained API to set the Resource back to whatever state it was in.
+				If both duration and end time are specified, end time takes preference over duration. 
+		.EXAMPLE
+			TBC
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER objectid
+			The vROps ID of the object to query.
+		.PARAMETER duration
+			The number of minutes that the object should be put into maintenance mode
+		.PARAMTER end
+			The date/time in Unix epoch format (number of milliseconds since 01/01/1970 00:00:00)
+			Use the getTimeSinceEpoch function and pass a date to the function to retrieve the required value
+		.NOTES
+			Added in version 0.3.5
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)][string]$objectid,
+		[parameter(Mandatory=$false)][int]$duration,
+		[parameter(Mandatory=$false)][string]$end
+		)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/maintained'
+		
+		if ($end -ne $null) {
+			$url += ('?end=' + $end)
+		}
+		elseif ($duration -ne $null) {
+			$url += ('?duration=' + $duration)
+		}
+		
+		if ($token -ne $null) {
+			$markResourceAsBeingMaintainedresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -token $token
+		}
+		else {
+			$markResourceAsBeingMaintainedresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -credentials $credentials
+		}	
+		return $markResourceAsBeingMaintainedresponse
+	}
+}
 function setRelationship {
 	<#
 		.SYNOPSIS
@@ -1394,141 +1827,6 @@ function setRelationship {
 			$setRelationshipresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -credentials $credentials -body $body -contenttype $contenttype
 		}	
 		return $setRelationshipresponse	
-	}
-}
-function getRelationship {	
-	<#
-		.SYNOPSIS
-			Gets the related resources of a particular Relationship Type for a Resource.
-		.DESCRIPTION
-			Gets the related resources of a particular Relationship Type for a Resource.
-		.EXAMPLE
-			getRelationship -resthost $resthost -token $token -objectid 80133295-18e4-42d5-a264-8af6b47f4d8e -relationship children
-		.PARAMETER credentials
-			A set of PS Credentials used to authenticate against the vROps endpoint.
-		.PARAMETER token
-			If token based authentication is being used (as opposed to credential based authentication)
-			then the token returned from the acquireToken cmdlet should be used.
-		.PARAMETER resthost
-			FQDN of the vROps instance or cluster to operate against.
-		.PARAMETER accept
-			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
-			However, the module has only been tested against json.
-		.PARAMETER objectid
-			vROps ID of the object to query
-		.PARAMETER relationship
-			Relationship type to query, valid values are 'parent' and 'children'.
-		.NOTES
-			Added in version 0.1
-	#>
-	Param	(
-		[parameter(Mandatory=$false)]$credentials,
-		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)]$token,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$true)][string]$objectid,	
-		[parameter(Mandatory=$true)][ValidateSet('children','parents')][String]$relationship
-	)	
-	Process {
-		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/relationships/' + $relationship
-		if ($token -ne $null) {
-			$getRelationshipresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
-		}
-		else {
-			$getRelationshipresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
-		}	
-		return $getRelationshipresponse
-	}
-}
-function getResourceProperties {
-	<#
-		.SYNOPSIS
-			Get all the properties for the specified Resource.
-		.DESCRIPTION
-			Get all the properties for the specified Resource.
-		.EXAMPLE
-			getResourceProperties -resthost $resthost -token $token -objectid 80133295-18e4-42d5-a264-8af6b47f4d8e
-		.PARAMETER credentials
-			A set of PS Credentials used to authenticate against the vROps endpoint.
-		.PARAMETER token
-			If token based authentication is being used (as opposed to credential based authentication)
-			then the token returned from the acquireToken cmdlet should be used.
-		.PARAMETER resthost
-			FQDN of the vROps instance or cluster to operate against.
-		.PARAMETER accept
-			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
-			However, the module has only been tested against json.
-		.PARAMETER objectid
-			vROps ID of the object to query
-		.NOTES
-			Added in version 0.1
-	#>
-	Param	(
-		[parameter(Mandatory=$false)]$credentials,
-		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)]$token,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$false)][string]$objectid	
-	)
-	Process {
-		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/properties'
-		if ($token -ne $null) {
-			$getResourcePropertiesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
-		}
-		else {
-			$getResourcePropertiesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
-		}	
-		return $getResourcePropertiesresponse
-	}
-}
-function deleteRelationship {
-	<#
-		.SYNOPSIS
-			Deletes (removes) a Resource as RelationshipType of a specific Resource.
-		.DESCRIPTION
-			Deletes (removes) a Resource as RelationshipType of a specific Resource.
-			If either of the Resources that are part of the path parameters are invalid/non-existent then the API returns a 404 error.
-			NOTE: Removing a relationship is not synchronous. As a result, the delete operation may not happen immediately.
-			It is recommended to query the relationships of the specific Resource back to ensure that the operation was indeed successful. 
-		.EXAMPLE
-			deleteRelationship -resthost $resthost -token $token -objectid 8014d795-18e4-42d5-a264-89f6b47f4d8e -relatedid 6434d795-1bc4-42d5-a264-89f6b47f4d8e -relationship children
-		.PARAMETER credentials
-			A set of PS Credentials used to authenticate against the vROps endpoint.
-		.PARAMETER token
-			If token based authentication is being used (as opposed to credential based authentication)
-			then the token returned from the acquireToken cmdlet should be used.
-		.PARAMETER resthost
-			FQDN of the vROps instance or cluster to operate against.
-		.PARAMETER accept
-			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
-			However, the module has only been tested against json.
-		.PARAMETER objectid
-			The vROps ID of the object to delete the relationship from
-		.PARAMETER relatedid
-			The vROps ID of the related object
-		.PARAMETER relationship
-			The vROps relationship between the primary object (objectid) and secondary object (relatedid)
-		.NOTES
-			Added in version 0.1
-	#>
-	Param	(
-		[parameter(Mandatory=$false)]$credentials,
-		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)]$token,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$true)][String]$objectid,
-		[parameter(Mandatory=$true)][String]$relatedid,
-		[parameter(Mandatory=$true)][ValidateSet('children','parent')][String]$relationship
-	)
-	Process {
-		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/relationships/' + $relationship + '/' + $relatedid	
-		if ($token -ne $null) {
-			$deleteRelationshipresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -token $token
-		}
-		else {
-			$deleteRelationshipresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -credentials $credentials
-		}	
-		return $deleteRelationshipresponse
 	}
 }
 function startMonitoringResource {
@@ -1613,177 +1911,6 @@ function stopMonitoringResource {
 		return $stopMonitoringResourceresponse
 	}
 }
-function getResources { # Need additional tests for pagesize and pagenumber
-	<#
-		.SYNOPSIS
-			Gets a listing of resources based on the query spec specified.
-		.DESCRIPTION
-			Currently the function only permits querying for resources via the following filters:
-				Name
-				ResourceKind
-				ObjectId
-		.EXAMPLE
-			getResources -resthost $resthost -token $token -name NameofObject
-		.EXAMPLE
-			getResources -resthost $resthost -token $token -resourceKind 'ClusterComputeResource'
-		.EXAMPLE
-			getResources -resthost $resthost -token $token -objectid 8014d795-18e4-42d5-a264-89f6b47f4d8e
-		.PARAMETER credentials
-			A set of PS Credentials used to authenticate against the vROps endpoint.
-		.PARAMETER token
-			If token based authentication is being used (as opposed to credential based authentication)
-			then the token returned from the acquireToken cmdlet should be used.
-		.PARAMETER resthost
-			FQDN of the vROps instance or cluster to operate against.
-		.PARAMETER accept
-			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
-			However, the module has only been tested against json.
-		.PARAMETER name
-			The name of the vROps object to query.
-		.PARAMETER resourceKind
-			The resourceKind of the objects to query. This will return multiple objects. Examples of resourceKind are:
-				ClusterComputeResource
-				VirtualMachine
-		.PARAMETER objectid
-			The vROps ID of the object to query.
-		.PARAMETER pagesize
-			The number of records to return as part of the query
-		.NOTES
-			Added in version 0.1
-	#>
-	Param	(
-		[parameter(Mandatory=$false)]$credentials,
-		[parameter(Mandatory=$false)]$token,
-		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$false)][String]$name,
-		[parameter(Mandatory=$false)][String]$resourceKind,
-		[parameter(Mandatory=$false)][Int]$pagesize = 1000,
-		[parameter(Mandatory=$false)][Int]$pagetoview = 0,
-		[parameter(Mandatory=$false)][string]$objectid	
-		)
-	Process {
-		$url = 'https://' + $resthost + '/suite-api/api/resources?'
-		if ($name -ne "") {
-			$url += 'name=' + $name + '&'
-		}
-		if ($resourceKind -ne "") {
-			$url += 'resourceKind=' + $resourceKind + '&'
-		}
-		if ($objectid -ne "") {
-			$url += 'resourceId=' + $objectid + '&'
-		}
-		$url = $url.Substring(0,$url.Length-1)
-		$url += '&pageSize=' + $pagesize + '&page=' + $pagetoview
-		if ($token -ne $null) {
-			$getResourcesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
-		}
-		else {
-			$getResourcesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
-		}
-		return $getResourcesresponse
-	}
-}		
-function getResource {
-	<#
-		.SYNOPSIS
-			Gets the Resource for the specified identifier.
-		.DESCRIPTION
-			Gets the Resource for the specified identifier.
-		.EXAMPLE
-			getResource -resthost $resthost -token $token -objectid 3014d793-18e4-42d5-a264-66f6b47f4d8e
-		.PARAMETER credentials
-			A set of PS Credentials used to authenticate against the vROps endpoint.
-		.PARAMETER token
-			If token based authentication is being used (as opposed to credential based authentication)
-			then the token returned from the acquireToken cmdlet should be used.
-		.PARAMETER resthost
-			FQDN of the vROps instance or cluster to operate against.
-		.PARAMETER accept
-			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
-			However, the module has only been tested against json.
-		.PARAMETER objectid
-			The vROps ID of the object to query.
-		.NOTES
-			Added in version 0.1
-	#>
-	Param	(
-		[parameter(Mandatory=$false)]$credentials,
-		[parameter(Mandatory=$false)]$token,
-		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$true)][string]$objectid	
-		)
-	Process {
-		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid
-		if ($token -ne $null) {
-			$getResourceresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
-		}
-		else {
-			$getResourceresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
-		}	
-		return $getResourceresponse
-	}
-}
-function markResourceAsBeingMaintained { # only single test for manual mode and documentation incomplete. Need tests for duration and end
-	<#
-		.SYNOPSIS
-			Put the specific Resource in Maintenance.
-		.DESCRIPTION
-			The Resource can end up in two maintenance states - MAINTAINED OR MAINTAINED_MANUAL - depending upon the inputs specified.
-				If duration/end time is specified, the resource will be placed in MAINTAINED state and after the duration/end time expires, the resource state is automatically set to the state it was in before entering the maintenance window.
-				If duration/end time is not specified, the resource will be placed in MAINTAINED_MANUAL state. Callers have to execute DELETE /suite-api/api/resources/{id}/maintained API to set the Resource back to whatever state it was in.
-				If both duration and end time are specified, end time takes preference over duration. 
-		.EXAMPLE
-			TBC
-		.PARAMETER credentials
-			A set of PS Credentials used to authenticate against the vROps endpoint.
-		.PARAMETER token
-			If token based authentication is being used (as opposed to credential based authentication)
-			then the token returned from the acquireToken cmdlet should be used.
-		.PARAMETER resthost
-			FQDN of the vROps instance or cluster to operate against.
-		.PARAMETER accept
-			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
-			However, the module has only been tested against json.
-		.PARAMETER objectid
-			The vROps ID of the object to query.
-		.PARAMETER duration
-			The number of minutes that the object should be put into maintenance mode
-		.PARAMTER end
-			The date/time in Unix epoch format (number of milliseconds since 01/01/1970 00:00:00)
-			Use the getTimeSinceEpoch function and pass a date to the function to retrieve the required value
-		.NOTES
-			Added in version 0.3.5
-	#>
-	Param	(
-		[parameter(Mandatory=$false)]$credentials,
-		[parameter(Mandatory=$false)]$token,
-		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$true)][string]$objectid,
-		[parameter(Mandatory=$false)][int]$duration,
-		[parameter(Mandatory=$false)][string]$end
-		)
-	Process {
-		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/maintained'
-		
-		if ($end -ne $null) {
-			$url += ('?end=' + $end)
-		}
-		elseif ($duration -ne $null) {
-			$url += ('?duration=' + $duration)
-		}
-		
-		if ($token -ne $null) {
-			$markResourceAsBeingMaintainedresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -token $token
-		}
-		else {
-			$markResourceAsBeingMaintainedresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -credentials $credentials
-		}	
-		return $markResourceAsBeingMaintainedresponse
-	}
-}
 function unmarkResourceAsBeingMaintained {
 	<#
 		.SYNOPSIS
@@ -1816,8 +1943,6 @@ function unmarkResourceAsBeingMaintained {
 		)
 	Process {
 		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/maintained'
-		
-		
 		if ($token -ne $null) {
 			$unmarkResourceAsBeingMaintainedresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -token $token
 		}
@@ -1826,26 +1951,7 @@ function unmarkResourceAsBeingMaintained {
 		}	
 		return $unmarkResourceAsBeingMaintainedresponse
 	}
-}
-function getStatsForResources { # No test, and no documentation
-	Param	(
-		[parameter(Mandatory=$false)]$credentials,
-		[parameter(Mandatory=$false)]$token,
-		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$true)]$body,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
-	)
-	Process {
-		$url = 'https://' + $resthost + '/suite-api/api/resources/stats/query'
-		if ($token -ne $null) {
-			$getStatsForResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body
-		}
-		else {
-			$getStatsForResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -body $body
-		}	
-		return $getStatsForResourcesresponse
-	}
-}
+}		
 
 # /api/solutions --------------------------------------------------------------------------------------------------------------
 
@@ -1882,6 +1988,7 @@ function getSuperMetric {
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][switch]$ignoressl,
 		[parameter(Mandatory=$false)][string]$supermetricid	
 	)
 	Process {
@@ -1927,6 +2034,7 @@ function getSuperMetrics {
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][switch]$ignoressl,
 		[parameter(Mandatory=$false)][string]$name	
 		)
 	Process {
@@ -1935,13 +2043,22 @@ function getSuperMetrics {
 		}
 		else {
 			$url = 'https://' + $resthost + '/suite-api/api/supermetrics?name=' + $name
-		}	
-			
+		}		
 		if ($token -ne $null) {
-			$getSuperMetricsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+			if ($ignoressl) {
+				$getSuperMetricsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token -ignoressl
+			}
+			else {
+				$getSuperMetricsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+			}
 		}
 		else {
-			$getSuperMetricsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+			if ($ignoressl) {
+				$getSuperMetricsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials -ignoressl
+			}
+			else {
+				$getSuperMetricsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+			}	
 		}	
 		return $getSuperMetricsresponse		
 	}
@@ -2130,9 +2247,9 @@ function deleteCustomGroup {
 		.DESCRIPTION
 			Delete a custom group. 
 		.EXAMPLE
-			getMembersOfGroup -resthost $resthost -token $token -objectid $customgroupID
+			deleteCustomGroup -resthost $resthost -token $token -objectid $customgroupID
 		.EXAMPLE
-			getMembersOfGroup -resthost $resthost -credentials $credentials -objectid $customgroupID
+			deleteCustomGroup -resthost $resthost -credentials $credentials -objectid $customgroupID
 		.PARAMETER credentials
 			A set of PS Credentials used to authenticate against the vROps endpoint.
 		.PARAMETER token
@@ -2168,6 +2285,49 @@ function deleteCustomGroup {
 	}
 }
 
+function modifyCustomGroup {
+	<#
+		.SYNOPSIS
+			Modified a custom group. 
+		.DESCRIPTION
+			Modified a custom group. 
+		.EXAMPLE
+			TBC
+		.EXAMPLE
+			TBC
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			TBC
+		.PARAMETER objectid
+			The vROps ID of the custom group to delete
+		.NOTES
+			Added in version 0.4.0
+	#>
+Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
+		[parameter(Mandatory=$true)][String]$body
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups'
+		if ($token -ne $null) {
+			$modifyCustomGroupresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -token $token -useinternalapi $true -contenttype $contenttype -body $body
+		}
+		else {
+			$modifyCustomGroupresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -credentials $credentials -useinternalapi $true -contenttype $contenttype -body $body
+		}	
+		return $modifyCustomGroupresponse
+}
+}
 export-modulemember -function 'get*'
 export-modulemember -function 'Create*'
 export-modulemember -function 'add*'
@@ -2181,7 +2341,7 @@ export-modulemember -function 'enumerate*'
 export-modulemember -function 'update*'
 export-modulemember -function 'mark*'
 export-modulemember -function 'unmark*'
-
+export-modulemember -function 'modify*'
 
 
 

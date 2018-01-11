@@ -413,7 +413,7 @@ elseif ($credentials -ne "") {
 
 
 
-if ((($getRelationshipafterset.resourceList).count -eq 1) -and ($getRelationshipafterset.resourceList.identifier -eq $getResourcesresourcekind.resourceList[0].identifier)) {
+if ((($getRelationshipafterset.resourceList).count -eq 1) -and ($getRelationshipafterset.resourceList.identifier -eq $getResourcesresourcekind.resourceList[1].identifier)) {
 $teststate = 'SUCCESS'
 write-host ($testname + ": " + $teststate) -foregroundcolor green 
 
@@ -431,19 +431,19 @@ $teststate = 'FAIL'
 $body = @{'uuids' = @($getCustomDataCenters.resourceList[0].identifier,$getResourcesresourcekind.resourceList[1].identifier)} | convertto-json # Create the JSON object
 
 if ($token -ne "") {
-	$addRelationship = addRelationship -resthost $resthost -token $token -objectid $getCustomDataCenters.resourceList[0].identifier -relationship children -body $body
+	$addRelationship = addRelationship -resthost $resthost -token $token -objectid $getCustomDataCenters.resourceList[1].identifier -relationship children -body $body
 }
 elseif ($credentials -ne "") {
-	$addRelationship = addRelationship -resthost $resthost -credentials $credentials -objectid $getCustomDataCenters.resourceList[0].identifier -relationship children -body $body
+	$addRelationship = addRelationship -resthost $resthost -credentials $credentials -objectid $getCustomDataCenters.resourceList[1].identifier -relationship children -body $body
 }
 
 start-sleep -seconds 20
 
 if ($token -ne "") {
-	$getRelationshipafteradd = getRelationship -resthost $resthost -token $token -objectid $getCustomDataCenters.resourceList[0].identifier -relationship children
+	$getRelationshipafteradd = getRelationship -resthost $resthost -token $token -objectid $getCustomDataCenters.resourceList[1].identifier -relationship children
 }
 elseif ($credentials -ne "") {
-	$getRelationshipafteradd = getRelationship -resthost $resthost -credentials $credentials -objectid $getCustomDataCenters.resourceList[0].identifier -relationship children
+	$getRelationshipafteradd = getRelationship -resthost $resthost -credentials $credentials -objectid $getCustomDataCenters.resourceList[1].identifier -relationship children
 }
 
 

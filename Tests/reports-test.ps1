@@ -18,13 +18,13 @@ import-module 'C:\Users\taguser\Documents\GitHub\PowervROps\powervrops.psm1'
 $testname = 'createReport'
 $teststate = 'FAIL'
 
-$reportdefinitionid = '4eaae8d7-c57a-4e0a-a2bc-e103d63d1aaf'
+$reportdefinitionid = '547eba86-0598-4c16-9bca-b1ed330f93ac'
 
 if ($token -ne "") {
-	$createReport = createReport -token $token -resthost $resthost -reportdefinitionid $reportdefinitionid -objectid f44eae09-b99a-4e85-9b8f-457739789ba1
+	$createReport = createReport -token $token -resthost $resthost -reportdefinitionid $reportdefinitionid -objectid 656052ca-f4ee-462a-967c-529057e269f0
 }
 elseif ($credentials -ne "") {
-	$createReport = createReport -credentials $credentials -resthost $resthost -reportdefinitionid $reportdefinitionid -objectid f44eae09-b99a-4e85-9b8f-457739789ba1
+	$createReport = createReport -credentials $credentials -resthost $resthost -reportdefinitionid $reportdefinitionid -objectid 656052ca-f4ee-462a-967c-529057e269f0
 }
 
 
