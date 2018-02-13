@@ -1,9 +1,9 @@
 # |----------------------------------------------------------------------------------------------------------------------------|
 # | Module Name: PowervROps.psm1                                                           									   |
 # | Author: Andy Davies (andyd@vmware.com)                                                                        			   |
-# | Date: 18th August 2017                                                                                    				   |
+# | Date: 13th February 2018                                                                                   				   |
 # | Description: PowerShell module that enables the use of the vROPs API via PowerShell cmdlets								   |
-# | Version: 0.4.0                                                                                              		   |
+# | Version: 0.4.1                                                                                              		   |
 # |----------------------------------------------------------------------------------------------------------------------------|
 
 function getTimeSinceEpoch {
@@ -27,12 +27,15 @@ function getTimeSinceEpoch {
 			Updated to include date argument in 0.3.5
 	#>
 	Param	(
-		[parameter(Mandatory=$false)]$date
+		[parameter(Mandatory=$false)]$date,
+		[parameter(Mandatory=$false)]$hourstoadd
 		)
 	process {
 		$epoch = (get-date -Date "01/01/1970").ToUniversalTime()
 		if ($date -eq $null) {
-			$referencetime = (get-date).ToUniversalTime()
+			$referencetime = ((get-date).AddHours($hourstoadd)).ToUniversalTime()
+			write-host ((get-date).AddHours($hourstoadd)).ToUniversalTime()
+			write-host (get-date).ToUniversalTime()
 		}
 		else {
 			$referencetime = $date.ToUniversalTime()
@@ -1672,12 +1675,9 @@ function getResources { # Need additional tests for pagesize and pagenumber
 function getStatsForResources { # No test, and no documentation
 	<#
 		.SYNOPSIS
-			Put the specific Resource in Maintenance.
+			TBC
 		.DESCRIPTION
-			The Resource can end up in two maintenance states - MAINTAINED OR MAINTAINED_MANUAL - depending upon the inputs specified.
-				If duration/end time is specified, the resource will be placed in MAINTAINED state and after the duration/end time expires, the resource state is automatically set to the state it was in before entering the maintenance window.
-				If duration/end time is not specified, the resource will be placed in MAINTAINED_MANUAL state. Callers have to execute DELETE /suite-api/api/resources/{id}/maintained API to set the Resource back to whatever state it was in.
-				If both duration and end time are specified, end time takes preference over duration. 
+			TBC
 		.EXAMPLE
 			TBC
 		.PARAMETER credentials
@@ -1688,15 +1688,7 @@ function getStatsForResources { # No test, and no documentation
 		.PARAMETER resthost
 			FQDN of the vROps instance or cluster to operate against.
 		.PARAMETER accept
-			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
-			However, the module has only been tested against json.
-		.PARAMETER objectid
-			The vROps ID of the object to query.
-		.PARAMETER duration
-			The number of minutes that the object should be put into maintenance mode
-		.PARAMTER end
-			The date/time in Unix epoch format (number of milliseconds since 01/01/1970 00:00:00)
-			Use the getTimeSinceEpoch function and pass a date to the function to retrieve the required value
+			TBC
 		.NOTES
 			Added in version 0.4.0
 	#>
