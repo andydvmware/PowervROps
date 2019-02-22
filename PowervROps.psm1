@@ -1,9 +1,9 @@
 # |----------------------------------------------------------------------------------------------------------------------------|
 # | Module Name: PowervROps.psm1                                                           									   |
 # | Author: Andy Davies (andyd@vmware.com)                                                                        			   |
-# | Date: 13th February 2018                                                                                   				   |
+# | Date: 22nd February 2019                                                                                  				   |
 # | Description: PowerShell module that enables the use of the vROPs API via PowerShell cmdlets								   |
-# | Version: 0.4.1                                                                                              		   |
+# | Version: 0.4.2                                                                                              		   |
 # |----------------------------------------------------------------------------------------------------------------------------|
 
 function getTimeSinceEpoch {
@@ -34,8 +34,6 @@ function getTimeSinceEpoch {
 		$epoch = (get-date -Date "01/01/1970").ToUniversalTime()
 		if ($date -eq $null) {
 			$referencetime = ((get-date).AddHours($hourstoadd)).ToUniversalTime()
-			write-host ((get-date).AddHours($hourstoadd)).ToUniversalTime()
-			write-host (get-date).ToUniversalTime()
 		}
 		else {
 			$referencetime = $date.ToUniversalTime()
@@ -170,66 +168,196 @@ function invokeRestMethod {
 		if ($body -ne $null) {
 			if ($token -ne $null) {
 				Try {
-
-				
 					$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -body $body -timeoutsec $timeoutsec -ErrorAction Stop
-
-				
 					return $response
 				}
 				Catch {
-					
-			return $_.Exception.Message
+					$e = $_.Exception
+					$msg = $e.Message
+					while ($e.InnerException) {
+						$e = $e.InnerException
+						$msg += "`n" + $e.Message
+					}
+					write-host $msg
+					return $_.Exception.Message
 				}	
 			}
 			else {
 				Try {
-
-			
 					$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -body $body -credential $credentials -timeoutsec $timeoutsec -ErrorAction Stop
-
-				
 					return $response
 				}
 				Catch {
-
-			return $_.Exception.Message	
+					$e = $_.Exception
+					$msg = $e.Message
+					while ($e.InnerException) {
+						$e = $e.InnerException
+						$msg += "`n" + $e.Message
+					}
+				write-host $msg	
+				return $_.Exception.Message	
 				}
 			}
 		}
 		else {
 			if ($token -ne $null) {
 				Try {
-
-		
 					$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -timeoutsec $timeoutsec -ErrorAction Stop
-
-			
 					return $response
 				}
 				Catch {
-
-			return $_.Exception.Message
+					$e = $_.Exception
+					$msg = $e.Message
+					while ($e.InnerException) {
+						$e = $e.InnerException
+						$msg += "`n" + $e.Message
+					}
+				$msg
+				return $_.Exception.Message
 				}	
 			}
 			else {
 				Try {
-
-			
 					$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -credential $credentials -timeoutsec $timeoutsec -ErrorAction Stop
-
-				
 					return $response
 				}
 				Catch {
-			return $_.Exception.Message
+					$e = $_.Exception
+					$msg = $e.Message
+					while ($e.InnerException) {
+						$e = $e.InnerException
+						$msg += "`n" + $e.Message
+					}
+					write-host $msg
+					return $_.Exception.Message
 				}
 			}
 		}
 	}
 }
 
-function connectvROpsServer { # TBC
+function processReponse {
+	Param (
+		[parameter(Mandatory=$true)][String]$jsonprimarykey,
+		[parameter(Mandatory=$true)][String]$xmlprimarykey,
+		[parameter(Mandatory=$true)][String]$xmlsecondarykey,
+		[parameter(Mandatory=$true)]$rawresponse,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept
+	)
+	if ($accept -eq 'json') {
+		if ($rawresponse.$jsonprimarykey) {
+			return $rawresponse.$jsonprimarykey
+		}
+		else {
+			throw $getLicenceKeysForProductresponse
+		}
+	}
+	else {
+		if ($rawresponse.$xmlprimarykey) {
+		
+		}
+	}
+}
+
+function connect-vropsserver { # TBC
+	Param	(
+		[parameter(Mandatory=$true)][String]$vropsserver,
+		[parameter(Mandatory=$false)][PSCredential]$credential,
+		[parameter(Mandatory=$false)][String]$username,
+		[parameter(Mandatory=$false)][String]$password,
+		[parameter(Mandatory=$false)][String]$authsource
+	)
+
+
+	
+	#write-host $username
+	#write-host $password
+	#w#rite-host $vropsserver
+	#write-host $authsource
+	
+	
+	
+	if ($credential) {
+	
+		write-host "we have some credentials"
+		$credential.username
+	
+	
+	}
+	else {
+	if (!$username) {
+		$username = read-host "Username: "
+	
+	}
+	if (!password) {
+	
+		$password = read-host "Password: "
+	
+	
+	
+	}
+	if (!authsource) {
+		
+	
+	
+	
+	
+	}
+	}
+	
+	
+	
+	  # Build cred object for default auth if user specified username/pass
+  #$connection_credentials = ""
+  #if($PsBoundParameters.ContainsKey("Username")) 
+  #{
+    # Is the -Password omitted? Prompt securely
+   # if(!$PsBoundParameters.ContainsKey("Password")) {
+    #  $connection_credentials = Get-Credential -UserName $Username -Message "vRealize Network Insight Platform Authentication"
+   # }
+    # If the password has been given in cleartext, 
+   # else {
+   #   $connection_credentials = New-Object System.Management.Automation.PSCredential($Username, $(ConvertTo-SecureString $Password -AsPlainText -Force))
+  #  }
+  #}
+  # If a credential object was given as a parameter, use that
+  #elseif($PSBoundParameters.ContainsKey("Credential")) 
+  #{
+   # $connection_credentials = $Credential
+  #}
+  # If no -Username or -Credential was given, prompt for credentials
+ # elseif(!$PSBoundParameters.ContainsKey("Credential")) {
+   # $connection_credentials = Get-Credential -Message "vRealize Network Insight Platform Authentication"
+  #}
+  
+  
+ # if (
+  
+	
+	
+	
+#if (!$authsource) {
+
+#write-host "No authsource"
+
+#}	
+
+#if ($globalvropsservers.count -gt 0) {
+
+#write-host "something in the global variable"
+
+#}
+#else {
+
+#$globalvropsservers = New-Object System.Collections.ArrayList
+
+#write-host "Nothing in the global variable"
+
+
+#}
+
+
+
 }
 #/api/actiondefinitions -------------------------------------------------------------------------------------------------------
 
@@ -279,6 +407,48 @@ function getAllActions {
 # /api/actions ----------------------------------------------------------------------------------------------------------------
 
 # /api/adapterkinds -----------------------------------------------------------------------------------------------------------
+
+function getResourcesWithAdapterKinds {
+	<#
+		.SYNOPSIS
+			Returns all the resources of a particular adapter type
+		.DESCRIPTION
+			Returns all the resources of a particular adapter type
+		.EXAMPLE
+			getResourcesWithAdapterKinds -resthost $resthost -token $token -adapterKindKey VMWARE
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER adapterKindKey
+			The name of the adapter type to filter
+		.NOTES
+			Added in version 0.4.2
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)]$adapterKindKey
+		)
+	Process {
+		$url = ('https://' + $resthost + '/suite-api/api/adapterkinds/' + $adapterKindKey + '/resources')
+		if ($token -ne $null) {
+			$getResourcesWithAdapterKindsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getResourcesWithAdapterKindsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getResourcesWithAdapterKindsresponse
+	}
+}
 
 # /api/adapters ---------------------------------------------------------------------------------------------------------------
 
@@ -332,6 +502,52 @@ function enumerateAdapterInstances {
 	}
 }
 
+function getResourcesOfAdapterInstance {
+	<#
+		.SYNOPSIS
+			Returns all of the resources of a given adapter instance
+		.DESCRIPTION
+			Returns all of the resources of a given adapter instance
+		.EXAMPLE
+			getREsourcesOfAdapterInstance -resthost $resthost -token $token -adapterKindKey vRealizeOpsMgrAPI
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER adapterKindKey
+			The name of the adapter type to filter
+		.NOTES
+			Added in version 0.4.2
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][switch]$ignoressl,
+		[parameter(Mandatory=$false)][Int]$pagesize = 1000,
+		[parameter(Mandatory=$false)][Int]$pagetoview = 0,
+		[parameter(Mandatory=$true)]$adapterID
+		)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/api/adapters/' + $adapterID + '/resources' 
+		$url += '?pageSize=' + $pagesize + '&page=' + $pagetoview
+		if ($token -ne $null) {
+			$getResourcesOfAdapterInstanceresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getResourcesOfAdapterInstanceresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getResourcesOfAdapterInstanceresponse
+	}
+}
+
 # /api/alertdefinitions -------------------------------------------------------------------------------------------------------
 	
 function getAlertDefinitionById {
@@ -366,7 +582,6 @@ function getAlertDefinitionById {
 		[parameter(Mandatory=$true)][String]$alertdefinitionid
 		)
 	$url = 'https://' + $resthost + '/suite-api/api/alertdefinitions/' + $alertdefinitionid		
-
 	if ($token -ne $null) {
 		$getAlertDefinitionByIdresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 	}
@@ -374,7 +589,6 @@ function getAlertDefinitionById {
 		$getAlertDefinitionByIdresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
 	}	
 	return $getAlertDefinitionByIdresponse
-
 }	
 function getAlertDefinitions {
 	<#
@@ -808,8 +1022,19 @@ function getLicenceKeysForProduct {
 		}
 		else {
 			$getLicenceKeysForProductresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
-		}	
-		return $getLicenceKeysForProductresponse
+		}
+		
+		
+		#$processedresponse = processReponse -rawresponse $getLicenceKeysForProductresponse -accept $accept -rootkey solutionlicenses
+		
+		return (processReponse -rawresponse $getLicenceKeysForProductresponse -accept $accept -jsonprimarykey solutionlicenses -xmlprimarykey "'solution-licenses'" -xmlsecondarykey "'solution-license'")
+		
+
+		
+		
+		
+		
+
 	}
 }
 
@@ -923,8 +1148,13 @@ function getReportDefinitions { # No test currently
 		}
 		else {
 			$getReportDefinitionsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
-		}	
-		return $getReportDefinitionsresponse
+		}
+
+		
+
+
+		
+		return $getReportDefinitionsresponse.reportdefinitions
 	}
 }
 
@@ -961,18 +1191,29 @@ function createReport {
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$true)][String]$objectid,
-		[parameter(Mandatory=$true)][String]$reportdefinitionid
+		[parameter(Mandatory=$true)][String]$reportdefinitionid,
+		[parameter(Mandatory=$false)][ValidateSet('vSphere Hosts and Clusters','Custom Groups')][String]$traversalspecname
 	)
 	Process {
-		$url = 'https://' + $resthost + '/suite-api/api/reports'
+		$url = 'https://' + $resthost + '/suite-api/api/reports'	
+		if ($traversalspecname = 'vSphere Hosts and Clusters') {
+			$tsname = 'vSphere Hosts and Clusters'
+			$rAKK = 'VMWARE'
+			$rRKK = 'vSphere World'
+		}
+		elseif ($traversalspecname = 'Custom Groups') {
+			$tsname = 'Custom Groups'
+			$rAKK = '?'
+			$rRKK = '?'
+		}	
 		$body = @{
 			'id'=$null
 			'resourceId'=$objectid
 			'reportDefinitionId'=$reportdefinitionid
 			'traversalSpec'=@{
-				'name'='Custom Groups'
-				'rootAdapterKindKey'='?'
-				'rootResourceKindKey'='?'
+				'name'=$tsname
+				'rootAdapterKindKey'=$rAKK
+				'rootResourceKindKey'=$rRKK
 				'adapterInstanceAssociation'=$false
 				'others'=@()
 				'otherAttributes'=@{}
@@ -1283,9 +1524,6 @@ function addStatsforResources {
 		return $addStatsforResourcesresponse
 	}
 }
-
-
-
 function createResourceUsingAdapterKind {
 	<#
 		.SYNOPSIS
@@ -1562,9 +1800,9 @@ function getResource {
 function getResourceProperties {
 	<#
 		.SYNOPSIS
-			Get all the properties for the specified Resource.
+			Gets all the Properties and their current (latest) values for the specified Resources.
 		.DESCRIPTION
-			Get all the properties for the specified Resource.
+			Gets all the Properties and their current (latest) values for the specified Resources.
 		.EXAMPLE
 			getResourceProperties -resthost $resthost -token $token -objectid 80133295-18e4-42d5-a264-8af6b47f4d8e
 		.PARAMETER credentials
@@ -1577,8 +1815,6 @@ function getResourceProperties {
 		.PARAMETER accept
 			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
 			However, the module has only been tested against json.
-		.PARAMETER objectid
-			vROps ID of the object to query
 		.NOTES
 			Added in version 0.1
 	#>
@@ -1587,7 +1823,7 @@ function getResourceProperties {
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$false)][string]$objectid	
+		[parameter(Mandatory=$false)]$objectid
 	)
 	Process {
 		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/properties'
@@ -1598,6 +1834,57 @@ function getResourceProperties {
 			$getResourcePropertiesresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
 		}	
 		return $getResourcePropertiesresponse
+	}
+}
+function getResourcePropertiesList {
+	<#
+		.SYNOPSIS
+			Get all the properties for the specified Resource.
+		.DESCRIPTION
+			Get all the properties for the specified Resource.
+		.EXAMPLE
+			getResourceProperties -resthost $resthost -token $token -resourceIds [array of resource IDs]
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER resourceIds
+			vROps ID of the object to query
+		.NOTES
+			Added in version 0.4.2.
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)]$resourceids
+		)
+	Process {	
+		$url = 'https://' + $resthost + '/suite-api/api/resources/properties'
+		for ($r=0;$r -lt $resourceIds.count;$r++) {
+			if ($resourceids[$r] -ne $null) {
+				if ($url.indexOf('properties?') -gt -1) {
+					$url = ($url + "&resourceId=" + $resourceids[$r])
+				}
+				else {
+					$url = ($url + "?resourceId=" + $resourceids[$r])
+				}
+			}	
+		}
+		if ($token -ne $null) {
+			$getResourcePropertiesListresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
+		}
+		else {
+			$getResourcePropertiesListresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
+		}	
+		return $getResourcePropertiesListresponse.resourcePropertiesList
 	}
 }
 function getResources { # Need additional tests for pagesize and pagenumber
@@ -2066,6 +2353,52 @@ function getSuperMetrics {
 
 # /internal/resources ---------------------------------------------------------------------------------------------------------
 
+function createStaticGroup {
+	<#
+		.SYNOPSIS
+			Create a new custom static group definition
+		.DESCRIPTION
+			Create a static group
+		.EXAMPLE
+			createCustomGroup -resthost $resthost -token $token -resourceIds $resourceIds -resourcekindkey $resourcekindkey -name $name
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER resourceIds
+			An array of resource Ids to add to the group
+
+		.NOTES
+			Added in version 0.4.2
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)]$name,
+		[parameter(Mandatory=$true)]$resourceids,
+		[parameter(Mandatory=$true)]$resourcekindkey
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/static?name=' + $name + "&resourceKind=" + $resourcekindkey + "&adapterKind=Container"
+		foreach ($resourceid in $resourceids) {
+			if ($resourceid -ne $null) {
+				$url = ($url + "&resourceId=" + $resourceid)
+			}	
+		}
+		if ($token -ne $null) {
+			$createStaticGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -useinternalapi $true
+		}
+		else {
+			$createStaticGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+		}	
+		return $createStaticGroupresponse
+	}
+}
 function getCustomGroup {
 	<#
 		.SYNOPSIS
@@ -2094,7 +2427,7 @@ function getCustomGroup {
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$true)][string]$objectid		
+		[parameter(Mandatory=$true)][string]$objectid
 	)
 	Process {
 		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $objectid	
@@ -2132,7 +2465,9 @@ function getCustomGroups {
 		[parameter(Mandatory=$false)]$credentials,
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)]$pagesize = 1000,
+		[parameter(Mandatory=$false)]$pagetoview = 0
 	)
 	Process {
 		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups'
@@ -2276,7 +2611,58 @@ function deleteCustomGroup {
 		return $deleteCustomGroupresponse
 	}
 }
+function replaceIncludedResourcesOfCustomGroup {
+	<#
+		.SYNOPSIS
+			Replace the list of resources in the included resources list.
+		.DESCRIPTION
+			Replace the list of resources in the included resources list.
+		.EXAMPLE
+			createCustomGroup -resthost $resthost -token $token -resourceIds $resourceIds -resourcekindkey $resourcekindkey -name $name
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER resourceIds
+			An array of resource Ids to add to the group
 
+		.NOTES
+			Added in version 0.4.2
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)]$resourceids,
+		[parameter(Mandatory=$true)]$groupid
+
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $groupid + '/includedResources'
+		foreach ($resourceid in $resourceids) {
+			if ($resourceid -ne $null) {
+				if ($url.indexOf("resourceId") -eq -1) {	
+					$url = ($url + "?resourceId=" + $resourceid)
+				}
+				else {
+					$url = ($url + "&resourceId=" + $resourceid)
+				}
+			}
+			
+		}
+		if ($token -ne $null) {
+			$createStaticGroupresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -token $token -useinternalapi $true
+		}
+		else {
+			$createStaticGroupresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+		}	
+		return $createStaticGroupresponse
+	}
+}
 function modifyCustomGroup {
 	<#
 		.SYNOPSIS
@@ -2320,6 +2706,9 @@ Param	(
 		return $modifyCustomGroupresponse
 }
 }
+
+# Export the functions from the script
+
 export-modulemember -function 'get*'
 export-modulemember -function 'Create*'
 export-modulemember -function 'add*'
@@ -2334,6 +2723,9 @@ export-modulemember -function 'update*'
 export-modulemember -function 'mark*'
 export-modulemember -function 'unmark*'
 export-modulemember -function 'modify*'
+export-modulemember -function 'connect*'
+export-modulemember -function 'process*'
+export-modulemember -function 'replace*'
 
 
 
