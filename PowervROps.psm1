@@ -1457,6 +1457,7 @@ function addStats {
 			However, the module has only been tested against json.
 		.NOTES
 			Added in version 0.1
+			Updated in version 0.4.2 to support disabling analytics processing
 	#>
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
@@ -1465,10 +1466,14 @@ function addStats {
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
 		[parameter(Mandatory=$true)]$body,
+		[parameter(Mandatory=$false)][switch]$disableanalyticsprocessing,
 		[parameter(Mandatory=$true)][String]$objectid
 		)
 	Process {
 		$url = 'https://' + $resthost + '/suite-api/api/resources/' + $objectid + '/stats'
+		if ($disableanalyticsprocessing) {
+			$url = $url + "?disableAnalyticsProcess=true"
+		}
 		if ($token -ne $null) {
 			$addStatsresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body -contenttype $contenttype
 		}
@@ -1504,6 +1509,7 @@ function addStatsforResources {
 			However, the module has only been tested against json.
 		.NOTES
 			Added in version 0.4
+			Updated in version 0.4.2 to support disabling analytics processing
 	#>
 	Param	(
 		[parameter(Mandatory=$false)]$credentials,
@@ -1511,10 +1517,14 @@ function addStatsforResources {
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
+		[parameter(Mandatory=$false)][switch]$disableanalyticsprocessing,
 		[parameter(Mandatory=$true)]$body
 		)
 	Process {
 		$url = 'https://' + $resthost + '/suite-api/api/resources/stats'
+		if ($disableanalyticsprocessing) {
+			$url = $url + "?disableAnalyticsProcess=true"
+		}
 		if ($token -ne $null) {
 			$addStatsforResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body -contenttype $contenttype
 		}
@@ -1984,16 +1994,20 @@ function getStatsForResources { # No test, and no documentation
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$true)]$body,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
+		
 	)
 	Process {
 		$url = 'https://' + $resthost + '/suite-api/api/resources/stats/query'
+		write-host $url
 		if ($token -ne $null) {
-			$getStatsForResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body
+			$getStatsForResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body -contenttype $contenttype
 		}
 		else {
-			$getStatsForResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -body $body
-		}	
+			$getStatsForResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -body $body -contenttype $contenttype
+		}
+		#write-host $getStatsForResourcesresponse.values
 		return $getStatsForResourcesresponse
 	}
 }
