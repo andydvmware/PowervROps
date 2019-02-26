@@ -1,9 +1,8 @@
 # |----------------------------------------------------------------------------------------------------------------------------|
 # | Module Name: PowervROps.psm1                                                           									   |
 # | Author: Andy Davies (andyd@vmware.com)                                                                        			   |
-# | Date: 22nd February 2019                                                                                  				   |
+# | Date: 26th February 2019                                                                                  				   |
 # | Description: PowerShell module that enables the use of the vROPs API via PowerShell cmdlets								   |
-# | Version: 0.4.2                                                                                              		   |
 # |----------------------------------------------------------------------------------------------------------------------------|
 
 function getTimeSinceEpoch {
@@ -1995,19 +1994,16 @@ function getStatsForResources { # No test, and no documentation
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$true)]$body,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'
-		
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json'	
 	)
 	Process {
 		$url = 'https://' + $resthost + '/suite-api/api/resources/stats/query'
-		write-host $url
 		if ($token -ne $null) {
 			$getStatsForResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body -contenttype $contenttype
 		}
 		else {
 			$getStatsForResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -body $body -contenttype $contenttype
 		}
-		#write-host $getStatsForResourcesresponse.values
 		return $getStatsForResourcesresponse
 	}
 }
@@ -2374,7 +2370,7 @@ function createStaticGroup {
 		.DESCRIPTION
 			Create a static group
 		.EXAMPLE
-			createCustomGroup -resthost $resthost -token $token -resourceIds $resourceIds -resourcekindkey $resourcekindkey -name $name
+			createStaticGroup -resthost $resthost -token $token -resourceIds $resourceIds -resourcekindkey $resourcekindkey -name $name
 		.PARAMETER credentials
 			A set of PS Credentials used to authenticate against the vROps endpoint.
 		.PARAMETER token
@@ -2398,19 +2394,60 @@ function createStaticGroup {
 		[parameter(Mandatory=$true)]$resourcekindkey
 	)
 	Process {
-		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/static?name=' + $name + "&resourceKind=" + $resourcekindkey + "&adapterKind=Container"
-		foreach ($resourceid in $resourceids) {
-			if ($resourceid -ne $null) {
-				$url = ($url + "&resourceId=" + $resourceid)
-			}	
+
+		# Due to the character limits in Powershell for URI, if the number of resource IDs is greater than 30, the remaining items are added to the custom group using the includeMoreResourcesIntoCustomGroup function
+		
+		if ($resourceids.count -gt 30) {
+			$numberofruns = 0
+			$numberperrun = 30
+			do {
+				if ($numberofruns -eq 0) { # The group hasn't been created yet, create the group and add the first 30 resource IDs
+					$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/static?name=' + $name + "&resourceKind=" + $resourcekindkey + "&adapterKind=Container"
+					for ($r = ($numberperrun * $numberofruns);$r -lt ($numberperrun * ($numberofruns + 1));$r++) {
+						if ($resourceids[$r] -ne $null) {
+							$url = ($url + "&resourceId=" + $resourceids[$r])
+						}	
+					}
+					if ($token -ne $null) {
+						$createStaticGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -useinternalapi $true
+					}
+					else {
+						$createStaticGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+					}
+				} # The group already exists, and we have the group ID
+				else {
+					$newresourceids = New-Object System.Collections.ArrayList
+					for ($r = ($numberperrun * $numberofruns);$r -lt ($numberperrun * ($numberofruns + 1));$r++) {
+						if ($resourceids[$r] -ne $null) {
+							$newresourceids.add($resourceids[$r]) | out-null
+						}	
+					}
+					if ($token -ne $null) {
+						includeMoreResourcesIntoCustomGroup -groupid $createStaticGroupresponse.identifier -resthost $resthost -token $token -resourceids $newresourceids
+					}
+					else {
+						includeMoreResourcesIntoCustomGroup -groupid $createStaticGroupresponse.identifier -resthost $resthost -credentials $credentials -resourceids $newresourceids
+					}
+				}
+				$numberofruns++
+			}
+			Until (($numberofruns*$numberperrun) -ge $resourceids.count)
 		}
-		if ($token -ne $null) {
-			$createStaticGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -useinternalapi $true
+		else { # There are less than 30 resource IDs, create the group in the standard fashion as an all-in-one call
+			$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/static?name=' + $name + "&resourceKind=" + $resourcekindkey + "&adapterKind=Container"
+			foreach ($resourceid in $resourceids) {
+				if ($resourceid -ne $null) {
+					$url = ($url + "&resourceId=" + $resourceid)
+				}	
+			}
+			if ($token -ne $null) {
+				$createStaticGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -useinternalapi $true
+			}
+			else {
+				$createStaticGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+			}
+			return $createStaticGroupresponse
 		}
-		else {
-			$createStaticGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -useinternalapi $true
-		}	
-		return $createStaticGroupresponse
 	}
 }
 function getCustomGroup {
@@ -2625,14 +2662,66 @@ function deleteCustomGroup {
 		return $deleteCustomGroupresponse
 	}
 }
-function replaceIncludedResourcesOfCustomGroup {
+function excludeMoreResourcesFromCustomGroup {
+	<#
+		.SYNOPSIS
+			Removes a list of resource IDs from a custom group
+		.DESCRIPTION
+			Removes a list of resource IDs from a custom group
+		.EXAMPLE
+			excludeMoreResourcesFromCustomGroup -resthost $resthost -token $token -resourceIds $resourceIds -groupid $groupid
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER resourceIds
+			An array of resource Ids to remove from the group
+		.PARAMETER groupId
+			vROps GUID of the custom group
+		.NOTES
+			Added in version 0.4.3
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)]$resourceids,
+		[parameter(Mandatory=$true)]$groupid
+
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $groupid + '/excludedResources'
+		foreach ($resourceid in $resourceids) {
+			if ($resourceid -ne $null) {
+				if ($url.indexOf("resourceId") -eq -1) {	
+					$url = ($url + "?resourceId=" + $resourceid)
+				}
+				else {
+					$url = ($url + "&resourceId=" + $resourceid)
+				}
+			}	
+		}		
+		if ($token -ne $null) {
+			$excludeMoreResourcesFromCustomGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -useinternalapi $true
+		}
+		else {
+			$excludeMoreResourcesFromCustomGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+		}	
+		return $includeMoreResourcesIntoCustomGroupresponse
+	}
+}
+function includeMoreResourcesIntoCustomGroup {
 	<#
 		.SYNOPSIS
 			Replace the list of resources in the included resources list.
 		.DESCRIPTION
 			Replace the list of resources in the included resources list.
 		.EXAMPLE
-			createCustomGroup -resthost $resthost -token $token -resourceIds $resourceIds -resourcekindkey $resourcekindkey -name $name
+			includeMoreResourcesIntoCustomGroup -resthost $resthost -token $token -resourceIds $resourceIds -groupid $groupid
 		.PARAMETER credentials
 			A set of PS Credentials used to authenticate against the vROps endpoint.
 		.PARAMETER token
@@ -2642,6 +2731,61 @@ function replaceIncludedResourcesOfCustomGroup {
 			FQDN of the vROps instance or cluster to operate against.
 		.PARAMETER resourceIds
 			An array of resource Ids to add to the group
+		.PARAMETER groupId
+			vROps GUID of the custom group
+
+		.NOTES
+			Added in version 0.4.2
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)]$resourceids,
+		[parameter(Mandatory=$true)]$groupid
+
+	)
+	Process {
+		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $groupid + '/includedResources'
+		foreach ($resourceid in $resourceids) {
+			if ($resourceid -ne $null) {
+				if ($url.indexOf("resourceId") -eq -1) {	
+					$url = ($url + "?resourceId=" + $resourceid)
+				}
+				else {
+					$url = ($url + "&resourceId=" + $resourceid)
+				}
+			}	
+		}
+		if ($token -ne $null) {
+			$includeMoreResourcesIntoCustomGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -useinternalapi $true
+		}
+		else {
+			$includeMoreResourcesIntoCustomGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+		}	
+		return $includeMoreResourcesIntoCustomGroupresponse
+	}
+}
+function replaceIncludedResourcesOfCustomGroup {
+	<#
+		.SYNOPSIS
+			Replace the list of resources in the included resources list.
+		.DESCRIPTION
+			Replace the list of resources in the included resources list.
+		.EXAMPLE
+			replaceIncludedResourcesOfCustomGroup -resthost $resthost -token $token -resourceIds $resourceIds -resourcekindkey $resourcekindkey -name $name -groupid $groupid
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER resourceIds
+			An array of resource Ids to add to the group
+		.PARAMETER groupId
+			The ID of the group that should be updated
 
 		.NOTES
 			Added in version 0.4.2
@@ -2666,7 +2810,6 @@ function replaceIncludedResourcesOfCustomGroup {
 					$url = ($url + "&resourceId=" + $resourceid)
 				}
 			}
-			
 		}
 		if ($token -ne $null) {
 			$createStaticGroupresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -token $token -useinternalapi $true
@@ -2740,6 +2883,6 @@ export-modulemember -function 'modify*'
 export-modulemember -function 'connect*'
 export-modulemember -function 'process*'
 export-modulemember -function 'replace*'
-
-
+export-modulemember -function 'include*'
+export-modulemember -function 'exclude*'
 
