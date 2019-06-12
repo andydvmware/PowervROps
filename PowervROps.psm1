@@ -1,8 +1,9 @@
 # |----------------------------------------------------------------------------------------------------------------------------|
 # | Module Name: PowervROps.psm1                                                           									   |
 # | Author: Andy Davies (andyd@vmware.com)                                                                        			   |
-# | Date: 26th February 2019                                                                                  				   |
-# | Description: PowerShell module that enables the use of the vROPs API via PowerShell cmdlets								   |
+# | Date: 12th June 2019                                                                                     				   |
+# | Description: PowerShell module that enables the use of the vROPs API via PowerShell cmdlets						           |
+# | Version: 0.4.5                                                                                    				   |
 # |----------------------------------------------------------------------------------------------------------------------------|
 
 function getTimeSinceEpoch {
@@ -1194,13 +1195,13 @@ function createReport {
 		[parameter(Mandatory=$false)][ValidateSet('vSphere Hosts and Clusters','Custom Groups')][String]$traversalspecname
 	)
 	Process {
-		$url = 'https://' + $resthost + '/suite-api/api/reports'	
-		if ($traversalspecname = 'vSphere Hosts and Clusters') {
+		$url = 'https://' + $resthost + '/suite-api/api/reports'		
+		if ($traversalspecname -eq 'vSphere Hosts and Clusters') {
 			$tsname = 'vSphere Hosts and Clusters'
 			$rAKK = 'VMWARE'
 			$rRKK = 'vSphere World'
 		}
-		elseif ($traversalspecname = 'Custom Groups') {
+		elseif ($traversalspecname -eq 'Custom Groups') {
 			$tsname = 'Custom Groups'
 			$rAKK = '?'
 			$rRKK = '?'
@@ -1943,6 +1944,7 @@ function getResources { # Need additional tests for pagesize and pagenumber
 		[parameter(Mandatory=$false)][String]$resourceKind,
 		[parameter(Mandatory=$false)][Int]$pagesize = 1000,
 		[parameter(Mandatory=$false)][Int]$pagetoview = 0,
+		[parameter(Mandatory=$false)]$resourcehealth,
 		[parameter(Mandatory=$false)][string]$objectid	
 		)
 	Process {
@@ -1955,6 +1957,9 @@ function getResources { # Need additional tests for pagesize and pagenumber
 		}
 		if ($objectid -ne "") {
 			$url += 'resourceId=' + $objectid + '&'
+		}
+		if ($resourcehealth) {
+			$url += 'resourceHealth=' + $resourcehealth + '&'
 		}
 		$url = $url.Substring(0,$url.Length-1)
 		$url += '&pageSize=' + $pagesize + '&page=' + $pagetoview
