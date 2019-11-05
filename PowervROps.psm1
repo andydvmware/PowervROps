@@ -2403,40 +2403,64 @@ function createStaticGroup {
 		# Due to the character limits in Powershell for URI, if the number of resource IDs is greater than 30, the remaining items are added to the custom group using the includeMoreResourcesIntoCustomGroup function
 		
 		if ($resourceids.count -gt 30) {
-			$numberofruns = 0
-			$numberperrun = 30
-			do {
-				if ($numberofruns -eq 0) { # The group hasn't been created yet, create the group and add the first 30 resource IDs
-					$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/static?name=' + $name + "&resourceKind=" + $resourcekindkey + "&adapterKind=Container"
-					for ($r = ($numberperrun * $numberofruns);$r -lt ($numberperrun * ($numberofruns + 1));$r++) {
-						if ($resourceids[$r] -ne $null) {
-							$url = ($url + "&resourceId=" + $resourceids[$r])
-						}	
-					}
-					if ($token -ne $null) {
-						$createStaticGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -useinternalapi $true
-					}
-					else {
-						$createStaticGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -useinternalapi $true
-					}
-				} # The group already exists, and we have the group ID
-				else {
-					$newresourceids = New-Object System.Collections.ArrayList
-					for ($r = ($numberperrun * $numberofruns);$r -lt ($numberperrun * ($numberofruns + 1));$r++) {
-						if ($resourceids[$r] -ne $null) {
-							$newresourceids.add($resourceids[$r]) | out-null
-						}	
-					}
-					if ($token -ne $null) {
-						includeMoreResourcesIntoCustomGroup -groupid $createStaticGroupresponse.identifier -resthost $resthost -token $token -resourceids $newresourceids
-					}
-					else {
-						includeMoreResourcesIntoCustomGroup -groupid $createStaticGroupresponse.identifier -resthost $resthost -credentials $credentials -resourceids $newresourceids
-					}
-				}
-				$numberofruns++
+			# New code
+			# This call is made since resourceId is mandatory for /suite-api/internal/resources/groups/static endpoint, the next call will replace all resources with complete set. 
+			# This will not bring much harm since it is called once
+			# Starting from vROps 7.5 release new public REST APIs is created for customGroup handling which is free of such kind of issues and it is the recommended way of customGroup processing starting from 7.5
+			$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/static?name=' + $name + "&resourceKind=" + $resourcekindkey + "&adapterKind=Container"
+			for ($r = 0;$r -lt 1;$r++) {
+				if ($resourceids[$r] -ne $null) {
+					$url = ($url + "&resourceId=" + $resourceids[$r])
+				}	
 			}
-			Until (($numberofruns*$numberperrun) -ge $resourceids.count)
+			if ($token -ne $null) {
+				$createStaticGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -useinternalapi $true
+			}
+			else {
+				$createStaticGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+			}
+
+			if (!$createStaticGroupresponse.identifier) {
+				return $createStaticGroupresponse
+			}
+
+			$updatedCustomGroupResponse = replaceCustomGroupIncludedResources -resthost $resthost -credentials $credentials -token $token -groupid $createStaticGroupresponse.identifier -resourceids $resourceids -ErrorAction Stop
+
+			return $updatedCustomGroupResponse
+			# $numberofruns = 0
+			# $numberperrun = 30
+			# do {
+			# 	if ($numberofruns -eq 0) { # The group hasn't been created yet, create the group and add the first 30 resource IDs
+			# 		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/static?name=' + $name + "&resourceKind=" + $resourcekindkey + "&adapterKind=Container"
+			# 		for ($r = ($numberperrun * $numberofruns);$r -lt ($numberperrun * ($numberofruns + 1));$r++) {
+			# 			if ($resourceids[$r] -ne $null) {
+			# 				$url = ($url + "&resourceId=" + $resourceids[$r])
+			# 			}	
+			# 		}
+			# 		if ($token -ne $null) {
+			# 			$createStaticGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -useinternalapi $true
+			# 		}
+			# 		else {
+			# 			$createStaticGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+			# 		}
+			# 	} # The group already exists, and we have the group ID
+			# 	else {
+			# 		$newresourceids = New-Object System.Collections.ArrayList
+			# 		for ($r = ($numberperrun * $numberofruns);$r -lt ($numberperrun * ($numberofruns + 1));$r++) {
+			# 			if ($resourceids[$r] -ne $null) {
+			# 				$newresourceids.add($resourceids[$r]) | out-null
+			# 			}	
+			# 		}
+			# 		if ($token -ne $null) {
+			# 			includeMoreResourcesIntoCustomGroup -groupid $createStaticGroupresponse.identifier -resthost $resthost -token $token -resourceids $newresourceids
+			# 		}
+			# 		else {
+			# 			includeMoreResourcesIntoCustomGroup -groupid $createStaticGroupresponse.identifier -resthost $resthost -credentials $credentials -resourceids $newresourceids
+			# 		}
+			# 	}
+			# 	$numberofruns++
+			# }
+			# Until (($numberofruns*$numberperrun) -ge $resourceids.count)
 		}
 		else { # There are less than 30 resource IDs, create the group in the standard fashion as an all-in-one call
 			$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/static?name=' + $name + "&resourceKind=" + $resourcekindkey + "&adapterKind=Container"
@@ -2825,6 +2849,47 @@ function replaceIncludedResourcesOfCustomGroup {
 		return $createStaticGroupresponse
 	}
 }
+function replaceCustomGroupIncludedResources {
+	<#
+		.SYNOPSIS
+			Replace the list of resources in the included resources list.
+		.DESCRIPTION
+			Replace the list of resources in the included resources list.
+		.EXAMPLE
+			updateCustomGroupMembers -resthost $resthost -token $token -resourceIds $resourceIds  -groupid $groupid
+		.PARAMETER credentials
+			A set of PS Credentials used to authenticate against the vROps endpoint.
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER resourceIds
+			An array of resource Ids to add to the group
+		.PARAMETER groupId
+			The ID of the group that should be updated
+
+		.NOTES
+			Added in version 0.4.2
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$true)]$resourceids,
+		[parameter(Mandatory=$true)]$groupid
+
+	)
+	Process {
+		$existingCustomGroup = getCustomGroup -resthost $resthost -token $token -credentials $credentials -objectid $groupid -accept $accept
+		$existingCustomGroup.membershipDefinition.includedResources = $resourceids
+		$existingCustomGroup = $existingCustomGroup | ConvertTo-Json
+
+		$modifiedCustomGroup = modifyCustomGroup -resthost $resthost -token $token -credentials $credentials -body $existingCustomGroup -accept $accept -contenttype $accept	
+		return $modifiedCustomGroup
+	}
+}
 function modifyCustomGroup {
 	<#
 		.SYNOPSIS
@@ -2855,7 +2920,7 @@ Param	(
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
-		[parameter(Mandatory=$true)][String]$body
+		[parameter(Mandatory=$true)][Object]$body
 	)
 	Process {
 		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups'
@@ -2890,4 +2955,3 @@ export-modulemember -function 'process*'
 export-modulemember -function 'replace*'
 export-modulemember -function 'include*'
 export-modulemember -function 'exclude*'
-
