@@ -89,7 +89,10 @@ function setRestHeaders {
 		}
 		if ($useinternalapi -eq $true) {
 			$restheaders.Add("X-vRealizeOps-API-use-unsupported","true")
-		}		
+		}
+		foreach ($header in $restheaders) {
+			write-verbose ("Header: " + $header)
+		}
 		return $restheaders
 	}
 }
@@ -165,21 +168,31 @@ function invokeRestMethod {
 				$restheaders = setRestHeaders -accept $accept -contenttype $contenttype
 			}
 		}
+
+
+	
+
+
+
 		if ($body -ne $null) {
 			if ($token -ne $null) {
 				Try {
 					$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -body $body -timeoutsec $timeoutsec -ErrorAction Stop
 					return $response
 				}
-				Catch {
-					$e = $_.Exception
-					$msg = $e.Message
-					while ($e.InnerException) {
-						$e = $e.InnerException
-						$msg += "`n" + $e.Message
+				Catch [System.Net.WebException] {
+					$respStream = $_.Exception.Response.GetResponseStream()
+            		$reader = New-Object System.IO.StreamReader($respStream)
+            		$reader.BaseStream.Position = 0
+            		$responseBody = $reader.ReadToEnd() | ConvertFrom-Json
+					Write-Host ("StatusCode:" + $_.Exception.Response.StatusCode)
+					write-host ("Number of Errors: " + $responseBody.validationFailures.count)
+					foreach ($violation in $responseBody.validationFailures) {
+						write-host $violation.failureMessage
 					}
-					write-host $msg
-					return $_.Exception.Message
+					
+				
+	
 				}	
 			}
 			else {
@@ -187,16 +200,20 @@ function invokeRestMethod {
 					$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -body $body -credential $credentials -timeoutsec $timeoutsec -ErrorAction Stop
 					return $response
 				}
-				Catch {
-					$e = $_.Exception
-					$msg = $e.Message
-					while ($e.InnerException) {
-						$e = $e.InnerException
-						$msg += "`n" + $e.Message
+				Catch [System.Net.WebException] {
+					$respStream = $_.Exception.Response.GetResponseStream()
+            		$reader = New-Object System.IO.StreamReader($respStream)
+            		$reader.BaseStream.Position = 0
+            		$responseBody = $reader.ReadToEnd() | ConvertFrom-Json
+					Write-Host ("StatusCode:" + $_.Exception.Response.StatusCode)
+					write-host ("Number of Errors: " + $responseBody.validationFailures.count)
+					foreach ($violation in $responseBody.validationFailures) {
+						write-host $violation.failureMessage
 					}
-				write-host $msg	
-				return $_.Exception.Message	
+				
+	
 				}
+
 			}
 		}
 		else {
@@ -205,15 +222,17 @@ function invokeRestMethod {
 					$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -timeoutsec $timeoutsec -ErrorAction Stop
 					return $response
 				}
-				Catch {
-					$e = $_.Exception
-					$msg = $e.Message
-					while ($e.InnerException) {
-						$e = $e.InnerException
-						$msg += "`n" + $e.Message
+				Catch [System.Net.WebException] {
+					$respStream = $_.Exception.Response.GetResponseStream()
+            		$reader = New-Object System.IO.StreamReader($respStream)
+            		$reader.BaseStream.Position = 0
+            		$responseBody = $reader.ReadToEnd() | ConvertFrom-Json
+					Write-Host ("StatusCode:" + $_.Exception.Response.StatusCode)
+
+					write-host ("Number of Errors: " + $responseBody.validationFailures.count)
+					foreach ($violation in $responseBody.validationFailures) {
+						write-host $violation.failureMessage
 					}
-				$msg
-				return $_.Exception.Message
 				}	
 			}
 			else {
@@ -221,15 +240,18 @@ function invokeRestMethod {
 					$response = Invoke-RestMethod -Method $method -Uri $url -Headers $restheaders -credential $credentials -timeoutsec $timeoutsec -ErrorAction Stop
 					return $response
 				}
-				Catch {
-					$e = $_.Exception
-					$msg = $e.Message
-					while ($e.InnerException) {
-						$e = $e.InnerException
-						$msg += "`n" + $e.Message
+				Catch [System.Net.WebException] {
+					$respStream = $_.Exception.Response.GetResponseStream()
+            		$reader = New-Object System.IO.StreamReader($respStream)
+            		$reader.BaseStream.Position = 0
+            		$responseBody = $reader.ReadToEnd() | ConvertFrom-Json
+					Write-Host ("StatusCode:" + $_.Exception.Response.StatusCode)
+					write-host ("Number of Errors: " + $responseBody.validationFailures.count)
+					foreach ($violation in $responseBody.validationFailures) {
+						write-host $violation.failureMessage
 					}
-					write-host $msg
-					return $_.Exception.Message
+				
+	
 				}
 			}
 		}
@@ -805,6 +827,7 @@ function acquireToken {
 				'otherAttributes' = @{}
 				} | convertto-json
 		}
+		Write-Verbose ("URL: " + $url)
 		Try {
 			$response = Invoke-RestMethod -Method 'POST' -Uri $url -Headers $restheaders -body $body -ErrorAction Stop
 			return $response.token
@@ -2003,12 +2026,21 @@ function getStatsForResources { # No test, and no documentation
 	)
 	Process {
 		$url = 'https://' + $resthost + '/suite-api/api/resources/stats/query'
+
+	
+
+
+
+
 		if ($token -ne $null) {
 			$getStatsForResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -body $body -contenttype $contenttype
 		}
 		else {
 			$getStatsForResourcesresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -body $body -contenttype $contenttype
 		}
+
+
+
 		return $getStatsForResourcesresponse
 	}
 }
@@ -2510,12 +2542,15 @@ function getCustomGroup {
 		[parameter(Mandatory=$true)][string]$objectid
 	)
 	Process {
-		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $objectid	
+		#$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $objectid
+		$url = 'https://' + $resthost + '/suite-api/api/resources/groups/' + $objectid	
 		if ($token -ne $null) {
-			$getcustomgroupresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token -useinternalapi $true
+			#$getcustomgroupresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token -useinternalapi $true
+			$getcustomgroupresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 		}
 		else {
-			$getcustomgroupresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+			#$getcustomgroupresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+			$getcustomgroupresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
 		}	
 		return $getcustomgroupresponse	
 	}
@@ -2550,12 +2585,15 @@ function getCustomGroups {
 		[parameter(Mandatory=$false)]$pagetoview = 0
 	)
 	Process {
-		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups'
+		#$url = 'https://' + $resthost + '/suite-api/internal/resources/groups'
+		$url = 'https://' + $resthost + '/suite-api/api/resources/groups'
 		if ($token -ne $null) {
-			$getCustomGroupsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token -useinternalapi $true
+			#$getCustomGroupsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token -useinternalapi $true
+			$getCustomGroupsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -token $token
 		}
 		else {
-			$getCustomGroupsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+			#$getCustomGroupsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+			$getCustomGroupsresponse = invokeRestMethod -method 'GET' -url $url -accept $accept -credentials $credentials
 		}	
 		return $getCustomGroupsresponse
 	}
@@ -2593,19 +2631,234 @@ function createCustomGroup {
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
-		[parameter(Mandatory=$true)][String]$body
+		[parameter(Mandatory=$true)][String]$customgroupname,
+		[parameter(Mandatory=$true)][String]$resourcekindkey,
+		[parameter(Mandatory=$false)][switch]$autoresolvemembership,
+		[parameter(Mandatory=$false)]$includedresources = @(),
+		[parameter(Mandatory=$false)]$excludedresources = @(),
+		[parameter(Mandatory=$false)]$membershipdefinition,
+		[parameter(Mandatory=$false)]$statconditionrules = @(),
+		[parameter(Mandatory=$false)]$propertyconditionrules = @(),
+		[parameter(Mandatory=$false)]$resourcenameconditionrules = @(),
+		[parameter(Mandatory=$false)]$relationshipconditionrules = @()
 	)
 	Process {
-		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups'
+		#$url = 'https://' + $resthost + '/suite-api/internal/resources/groups'
+
+
+	$membershipbody = @{}
+	$membershipbody.id = $null
+	$membershipbody.resourceKey = @{}
+	$membershipbody.resourceKey.name = $customgroupname
+	$membershipbody.resourceKey.adapterKindKey = 'Container'
+	$membershipbody.resourceKey.resourceKindKey = $resourcekindkey
+	$membershipbody.resourceKey.others = @()
+	$membershipbody.resourceKey.otherAttributes = @{}
+
+	if ($autoresolvemembership) {
+		$membershipbody.autoResolveMembership = $true
+	}
+	else {
+		$membershipbody.autoResolveMembership = $false
+	}
+	
+	$membershipbody.membershipDefinition = @{}
+	$membershipbody.membershipDefinition.includedResources = $includedresources
+	$membershipbody.membershipDefinition.excludedResources = $excludedresources
+	$membershipbody.membershipDefinition.'custom-group-properties' = @()
+	
+
+	$membershipbodyrulesarray = @()
+
+	if ($membershipdefinition) {
+		$membershipbodyrules = @{}
+		$membershipbodyrules.resourceKindKey = $membershipdefinition
+		$membershipbodyrules.statConditionRules = $statconditionrules
+		$membershipbodyrules.propertyConditionRules = $propertyconditionrules
+		$membershipbodyrules.resourceNameConditionRules = $resourcenameconditionrules
+		$membershipbodyrules.relationshipConditionRules = $relationshipconditionrules
+		$membershipbodyrules.others = @()
+		$membershipbodyrules.otherAttributes = @{}
+		$membershipbodyrulesarray += $membershipbodyrules
+	}
+
+
+
+	
+
+	$membershipbody.membershipDefinition.rules = $membershipbodyrulesarray
+	$membershipbody.membershipDefinition.others = @()
+	$membershipbody.membershipDefinition.otherAttributes = @{}
+
+	$membershipbody.others = @()
+	$membershipbody.otherAttributes = @{}
+
+	
+		
+
+	$body = $membershipbody | ConvertTo-Json -depth 15
+
+
+
+
+
+
+
+
+
+		$url = 'https://' + $resthost + '/suite-api/api/resources/groups'
+
+
+	
+
+		
 		if ($token -ne $null) {
-			$createCustomGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -useinternalapi $true -contenttype $contenttype -body $body
+			#$createCustomGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -useinternalapi $true -contenttype $contenttype -body $body
+			$createCustomGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -contenttype $contenttype -body $body
 		}
 		else {
-			$createCustomGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -useinternalapi $true -contenttype $contenttype -body $body
+			#$createCustomGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -useinternalapi $true -contenttype $contenttype -body $body
+			$createCustomGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -contenttype $contenttype -body $body
 		}	
 		return $createCustomGroupresponse
 	}
 }
+
+function modifyCustomGroup {
+	<#
+		.SYNOPSIS
+			Modifies custom group definition
+		.DESCRIPTION
+			The new group can be created with one of the following definitions:
+				Metric Key
+				Property Key
+				Relationship Condition
+				Resource Name
+		.EXAMPLE
+			xxxxxx
+		.PARAMETER credentials
+			xxxxxxx
+		.PARAMETER token
+			If token based authentication is being used (as opposed to credential based authentication)
+			then the token returned from the acquireToken cmdlet should be used.
+		.PARAMETER resthost
+			FQDN of the vROps instance or cluster to operate against.
+		.PARAMETER accept
+			Analogous to the header parameter 'Accept' used in REST calls, valid values are xml or json.
+			However, the module has only been tested against json.
+		.PARAMETER body
+			xxxxxxxxxx
+		.NOTES
+			Added in version 0.5
+	#>
+	Param	(
+		[parameter(Mandatory=$false)]$credentials,
+		[parameter(Mandatory=$false)]$token,
+		[parameter(Mandatory=$true)][String]$resthost,
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
+		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
+		[parameter(Mandatory=$true)][String]$identifier,
+		[parameter(Mandatory=$true)][String]$customgroupname,
+		[parameter(Mandatory=$true)][String]$resourcekindkey,
+		[parameter(Mandatory=$false)][switch]$autoresolvemembership,
+		[parameter(Mandatory=$false)]$includedresources = @(),
+		[parameter(Mandatory=$false)]$excludedresources = @(),
+		[parameter(Mandatory=$false)]$membershipdefinition,
+		[parameter(Mandatory=$false)]$statconditionrules = @(),
+		[parameter(Mandatory=$false)]$propertyconditionrules = @(),
+		[parameter(Mandatory=$false)]$resourcenameconditionrules = @(),
+		[parameter(Mandatory=$false)]$relationshipconditionrules = @()
+	)
+	Process {
+		#$url = 'https://' + $resthost + '/suite-api/internal/resources/groups'
+
+
+	$membershipbody = @{}
+	$membershipbody.id = $identifier
+	$membershipbody.resourceKey = @{}
+	$membershipbody.resourceKey.name = $customgroupname
+	$membershipbody.resourceKey.adapterKindKey = 'Container'
+	$membershipbody.resourceKey.resourceKindKey = $resourcekindkey
+	$membershipbody.resourceKey.others = @()
+	$membershipbody.resourceKey.otherAttributes = @{}
+
+	if ($autoresolvemembership) {
+		$membershipbody.autoResolveMembership = $true
+	}
+	else {
+		$membershipbody.autoResolveMembership = $false
+	}
+	
+	$membershipbody.membershipDefinition = @{}
+	$membershipbody.membershipDefinition.includedResources = $includedresources
+	$membershipbody.membershipDefinition.excludedResources = $excludedresources
+	$membershipbody.membershipDefinition.'custom-group-properties' = @()
+	
+
+	$membershipbodyrulesarray = @()
+
+
+
+	if ($membershipdefinition) {
+		$membershipbodyrules = @{}
+		$membershipbodyrules.resourceKindKey = $membershipdefinition
+		$membershipbodyrules.statConditionRules = $statconditionrules
+		$membershipbodyrules.propertyConditionRules = $propertyconditionrules
+		$membershipbodyrules.resourceNameConditionRules = $resourcenameconditionrules
+		$membershipbodyrules.relationshipConditionRules = $relationshipconditionrules
+		$membershipbodyrules.others = @()
+		$membershipbodyrules.otherAttributes = @{}
+
+
+		$membershipbodyrulesarray += $membershipbodyrules
+
+	}
+
+	
+
+	$membershipbody.membershipDefinition.rules = $membershipbodyrulesarray
+	$membershipbody.membershipDefinition.others = @()
+	$membershipbody.membershipDefinition.otherAttributes = @{}
+
+	$membershipbody.others = @()
+	$membershipbody.otherAttributes = @{}
+
+	
+		
+
+	$body = $membershipbody | ConvertTo-Json -depth 15
+
+
+
+
+
+
+
+
+
+		$url = 'https://' + $resthost + '/suite-api/api/resources/groups'
+
+
+
+		
+		if ($token) {
+			#$createCustomGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -token $token -useinternalapi $true -contenttype $contenttype -body $body
+			$modifyCustomGroupresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -token $token -contenttype $contenttype -body $body
+		}
+		else {
+			#$createCustomGroupresponse = invokeRestMethod -method 'POST' -url $url -accept $accept -credentials $credentials -useinternalapi $true -contenttype $contenttype -body $body
+			$modifyCustomGroupresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -credentials $credentials -contenttype $contenttype -body $body
+		}	
+		return $modifyCustomGroupresponse
+	}
+}
+
+
+
+
+
+
+
 function getMembersOfGroup {
 	<#
 		.SYNOPSIS
@@ -2677,16 +2930,18 @@ function deleteCustomGroup {
 		[parameter(Mandatory=$false)]$token,
 		[parameter(Mandatory=$true)][String]$resthost,
 		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$true)][String]$objectid
+		[parameter(Mandatory=$true)][String]$identifier
 	)
 	Process {
-		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups/' + $objectid
+		$url = 'https://' + $resthost + '/suite-api/api/resources/groups/' + $identifier
 
-		if ($token -ne $null) {
-			$deleteCustomGroupresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -token $token -useinternalapi $true
+
+
+		if ($token) {
+			$deleteCustomGroupresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -token $token
 		}
 		else {
-			$deleteCustomGroupresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -credentials $credentials -useinternalapi $true
+			$deleteCustomGroupresponse = invokeRestMethod -method 'DELETE' -url $url -accept $accept -credentials $credentials
 		}	
 		return $deleteCustomGroupresponse
 	}
@@ -2890,49 +3145,7 @@ function replaceCustomGroupIncludedResources {
 		return $modifiedCustomGroup
 	}
 }
-function modifyCustomGroup {
-	<#
-		.SYNOPSIS
-			Modified a custom group. 
-		.DESCRIPTION
-			Modified a custom group. 
-		.EXAMPLE
-			TBC
-		.EXAMPLE
-			TBC
-		.PARAMETER credentials
-			A set of PS Credentials used to authenticate against the vROps endpoint.
-		.PARAMETER token
-			If token based authentication is being used (as opposed to credential based authentication)
-			then the token returned from the acquireToken cmdlet should be used.
-		.PARAMETER resthost
-			FQDN of the vROps instance or cluster to operate against.
-		.PARAMETER accept
-			TBC
-		.PARAMETER objectid
-			The vROps ID of the custom group to delete
-		.NOTES
-			Added in version 0.4.0
-	#>
-Param	(
-		[parameter(Mandatory=$false)]$credentials,
-		[parameter(Mandatory=$false)]$token,
-		[parameter(Mandatory=$true)][String]$resthost,
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')][string]$accept = 'json',
-		[parameter(Mandatory=$false)][ValidateSet('xml','json')]$contenttype = 'json',
-		[parameter(Mandatory=$true)][Object]$body
-	)
-	Process {
-		$url = 'https://' + $resthost + '/suite-api/internal/resources/groups'
-		if ($token -ne $null) {
-			$modifyCustomGroupresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -token $token -useinternalapi $true -contenttype $contenttype -body $body
-		}
-		else {
-			$modifyCustomGroupresponse = invokeRestMethod -method 'PUT' -url $url -accept $accept -credentials $credentials -useinternalapi $true -contenttype $contenttype -body $body
-		}	
-		return $modifyCustomGroupresponse
-}
-}
+
 
 # Export the functions from the script
 

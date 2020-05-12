@@ -3,16 +3,16 @@ param(
 	[parameter(Mandatory=$true)][string]$resthost
 	)
 clear	
-$alltests = get-childitem 'c:\users\taguser\documents\github\powervrops\tests'	
+$alltests = get-childitem 'c:\users\administrator\documents\github\powervrops\tests'	
 if ($authtype -eq 'token') {
 
 if ((get-module 'PowervROps') -eq $null) {
-import-module 'C:\Users\taguser\Documents\GitHub\PowervROps\powervrops.psm1'
+import-module 'C:\Users\administrator\Documents\GitHub\PowervROps\powervrops.psm1'
 }
 $teststate = 'FAIL'
 $testname = 'getAllActions'
 $username = 'admin'
-$password = 'VMware1!'
+$password = '5eRen!ty'
 $authSource = 'local'
 $token = acquireToken -resthost $resthost -username $username -password $password -authSource $authSource
 if ($token.length -eq 74) {
